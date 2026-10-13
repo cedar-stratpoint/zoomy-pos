@@ -8,6 +8,7 @@ import type { FlowBlock, FlowStep } from '../../constants/playbook';
 import { ActionList } from './ActionList';
 import { ChipRow } from './ChipRow';
 import { SayLine } from './SayLine';
+import { PRESS_OPACITY } from '../../constants/motion';
 
 type Props = { step: FlowStep; number: number; isLast: boolean };
 
@@ -58,7 +59,7 @@ export function StepCard({ step, number, isLast }: Props) {
             testID="playbook-shortcut-free-taste"
             style={styles.shortcut}
             onPress={() => router.push('/modals/free-taste')}
-            activeOpacity={0.8}
+            activeOpacity={PRESS_OPACITY}
             accessibilityRole="button"
           >
             <Ionicons name="nutrition-outline" size={18} color="#fff" />

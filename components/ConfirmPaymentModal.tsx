@@ -5,6 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import type { PaymentMethod } from '../db/transactions';
 import { quickMethodMeta } from '../constants/payment';
 import { TourTarget } from './tour/TourTarget';
+import { PRESS_OPACITY_PRIMARY } from '../constants/motion';
 
 type Props = {
   visible: boolean;
@@ -63,7 +64,7 @@ export function ConfirmPaymentModal({ visible, method, total, customerHandle, on
               testID="confirm-pay-cancel"
               style={[styles.btn, styles.cancel]}
               onPress={onCancel}
-              activeOpacity={0.85}
+              activeOpacity={PRESS_OPACITY_PRIMARY}
             >
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
@@ -71,7 +72,7 @@ export function ConfirmPaymentModal({ visible, method, total, customerHandle, on
               testID="confirm-pay-confirm"
               style={[styles.btn, styles.confirm]}
               onPress={onConfirm}
-              activeOpacity={0.85}
+              activeOpacity={PRESS_OPACITY_PRIMARY}
             >
               <Text style={styles.confirmText}>{meta.emoji}  Paid</Text>
             </TouchableOpacity>

@@ -10,6 +10,7 @@ import { decrementStock, type Product } from '../db/products';
 import { insertFreeTaste, markFreeTasteSynced, type FreeTaste } from '../db/free-tastes';
 import { pushFreeTaste } from '../utils/free-tastes-sync';
 import { refreshPendingCount } from '../utils/outbox';
+import { PRESS_OPACITY, PRESS_OPACITY_PRIMARY } from '../constants/motion';
 
 /**
  * Single-product free-taste quick sheet, opened by long-pressing a product tile.
@@ -126,10 +127,10 @@ export function FreeTasteQuickSheet({ product, onClose }: { product: Product | n
 
           <TourTarget id="quick-actions">
           <View style={s.actions}>
-            <TouchableOpacity style={s.cancelBtn} onPress={onClose} activeOpacity={0.7}>
+            <TouchableOpacity style={s.cancelBtn} onPress={onClose} activeOpacity={PRESS_OPACITY}>
               <Text style={s.cancelText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[s.primaryBtn, submitting && s.primaryDisabled]} onPress={submit} disabled={submitting} activeOpacity={0.85}>
+            <TouchableOpacity style={[s.primaryBtn, submitting && s.primaryDisabled]} onPress={submit} disabled={submitting} activeOpacity={PRESS_OPACITY_PRIMARY}>
               <Text style={s.primaryText}>{submitting ? 'Recording…' : `Log free taste`}</Text>
             </TouchableOpacity>
           </View>
