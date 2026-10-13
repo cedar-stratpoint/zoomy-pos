@@ -12,6 +12,77 @@ Dates are local working dates (GMT+8). Newest first.
 
 ---
 
+## 2026-10-13 — Motion polish: shared Sheet, motion tokens, reduced motion — `feat(motion)`
+
+A motion audit of POS + Coop (`design-motion-principles` skill, Emil primary /
+Jakub secondary) found the high-frequency taps already right (instant, opacity
+dip only) but the surfaces around them unfinished. The user picked which
+findings to fix; this is the POS half.
+
+**Decisions.**
+- **Shared `Sheet`** (`components/Sheet.tsx`) replaces `<Modal animationType="slide">`,
+  which slides the whole modal so the dim layer rode up with the panel. The
+  backdrop now fades in place, only the panel travels, and the sheet stays
+  mounted through its exit while holding the last open content (callers clear
+  `selected` / `editingTx` as they close). Used by the variant picker, the
+  transaction detail sheet and Edit sale. Nested Modals inside those sheets
+  stay nested, so their behavior is unchanged.
+- **Header menu drops from the top** (`<Sheet from="top">`) instead of fading
+  in place, matching where the panel lives.
+- **Motion tokens** in `constants/motion.ts`: `EASE_OUT` (0.23,1,0.32,1) for
+  small UI, `EASE_SHEET` (iOS 0.32,0.72,0,1) for travelling surfaces, and the
+  durations. Core `Animated.timing` defaults to ease-in-out, which made the cart
+  sheet start slow; it now runs 240ms in / 200ms out on the sheet curve.
+- **Toast**: exit is opacity-only and quicker (140ms) than the 180ms enter, and
+  a toast that replaces another ("Sale recorded" then "Not synced to Coop")
+  fades the old one out first instead of hard-cutting.
+- **Reduced motion**: new `useReducedMotion()` hook (live, so toggling the OS
+  setting mid-shift applies). Sheets and the menu fade instead of sliding, the
+  toast drops its 16px travel, the cart sheet jumps to place (a drag still
+  follows the finger). TourOverlay now uses the same hook.
+- **Press feedback**: the five `activeOpacity` literals become `PRESS_OPACITY`
+  (0.7) and `PRESS_OPACITY_PRIMARY` (0.85, large solid buttons). The
+  `activeOpacity={1}` backdrops are intentional and unchanged.
+- **Kept as is (user call):** product tiles and steppers stay un-animated.
+
+Verified: typecheck, 383 tests (3 new for `Sheet`), and in the browser at phone
+width with and without `prefers-reduced-motion`.
+
+## 2026-10-09 — Transactions loads in one request; capped pull no longer prunes old sales — `fix(transactions)`
+
+A seller at an Oct 8 event reported Transactions sitting on its spinner. Coop's
+logs showed every query finishing in under 0.5 s at origin, so the database was
+not the cause. The screen made 4 to 6 sequential round trips per load, three of
+them carrying all 500 order ids in a ~20 KB `in.(...)` query string, and the
+whole chain ran twice in parallel (focus plus pull-to-refresh). On venue LTE
+that came to about 8 s.
+
+**Decisions.**
+- `fetchRemoteOrders` is now one PostgREST embedded read: `pos_orders` with
+  `pos_order_items(pos_products(name))` and non-voided `pos_order_prizes`. The
+  request URL drops from ~20 KB to ~350 bytes. 500 parents stay under the
+  1000-row cap and embedded rows are not capped, so no paging is needed.
+  Trade-off accepted: a prize read failure now fails the whole pull (the screen
+  falls back to the local list) instead of only hiding prize badges. Both
+  Staging and prod have `pos_order_prizes`.
+- The pull aborts after 15 s so a stalled connection cannot hold the spinner
+  open; the local list stays on screen.
+- Focus and pull-to-refresh share one in-flight load. Edit-save and import pass
+  `fresh` so they wait out a running load and then read again.
+- **Bug fixed along the way:** the pull is capped at the newest 500 orders, and
+  prod passed 500. The deletion-prune treated any synced local sale absent from
+  that capped list as "deleted on Coop" and removed it from the device, taking
+  its local-only detail (cash tendered, proof photo) with it. The pull now
+  reports `windowStart`, and `transactionsToPrune` only considers sales strictly
+  newer than it. Sales already pruned this way are still on Coop and still show
+  as remote rows when inside the window; their local-only detail is not
+  recoverable.
+
+Reviewed for regressions before merge (output equivalence, RLS, FK ambiguity,
+row caps, dedupe races). 380 tests pass.
+
+---
+
 ## 2026-10-05 — Playbook rewritten in Taglish, simpler layout — `feat(playbook)` `fix(tour)`
 
 Replaced the translated English playbook with the seller's own Booth Playbook
