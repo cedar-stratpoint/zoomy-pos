@@ -1,10 +1,11 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import { Animated, AccessibilityInfo, Modal, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Animated, Modal, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { useTour } from '../../context/TourContext';
 import { R } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { TourTooltip } from './TourTooltip';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const SCRIM = 'rgba(0,0,0,0.72)';
 const PAD = 6;
@@ -24,7 +25,7 @@ export function TourOverlay() {
   const { active, step, rect, status, epoch, index, total, next, back, stop } = useTour();
   const { colors } = useTheme();
   const { width: W, height: H } = useWindowDimensions();
-  const [reduceMotion, setReduceMotion] = useState(false);
+  const reduceMotion = useReducedMotion();
   const insets = useContext(SafeAreaInsetsContext) ?? NO_INSETS;
   const [cardHeight, setCardHeight] = useState(0);
 
@@ -33,10 +34,6 @@ export function TourOverlay() {
   const w = useRef(new Animated.Value(0)).current;
   const h = useRef(new Animated.Value(0)).current;
   const hadRect = useRef(false);
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (!rect) {
