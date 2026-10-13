@@ -14,6 +14,7 @@ import {
   filterProducts, subcategoriesFor, defaultSelectionFor, initialSelection,
 } from '../../utils/catalog-filter';
 import { useCart } from '../../context/CartContext';
+import { PRESS_OPACITY } from '../../constants/motion';
 
 type Selection = { category: string | null; subcategory: string | null };
 
@@ -122,7 +123,7 @@ export default function PrizeSelectModal() {
             testID={`prize-pick-${item.id}`}
             style={styles.row}
             onPress={() => pick(item)}
-            activeOpacity={0.7}
+            activeOpacity={PRESS_OPACITY}
           >
             <View style={styles.rowInfo}>
               <Text style={styles.rowName} numberOfLines={2}>

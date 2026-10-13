@@ -16,6 +16,7 @@ import { F, R, type Palette } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { TourTarget } from '../../components/tour/TourTarget';
 import { PRODUCT_EMOJIS, MAX_EMOJI, emojiGraphemes, clampEmoji } from '../../constants/emoji';
+import { PRESS_OPACITY } from '../../constants/motion';
 
 const MIN_ITEMS = 1;
 
@@ -173,7 +174,7 @@ export default function BundleModal() {
                   key={line}
                   style={[styles.lineRow, on && styles.lineRowOn]}
                   onPress={() => toggleLine(line)}
-                  activeOpacity={0.7}
+                  activeOpacity={PRESS_OPACITY}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: on }}
                 >

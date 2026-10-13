@@ -10,6 +10,7 @@ import type { PaymentMethod } from '../../db/transactions';
 import { useToast } from '../../components/Toast';
 import { F, R, type Palette } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
+import { PRESS_OPACITY } from '../../constants/motion';
 
 /**
  * Settings -> Payment Options. Controls which quick-tap methods show on the
@@ -69,7 +70,7 @@ export default function PaymentSettingsModal() {
                 key={m.key}
                 style={[styles.methodRow, i > 0 && styles.methodRowBorder]}
                 onPress={() => toggleMethod(m.key)}
-                activeOpacity={0.7}
+                activeOpacity={PRESS_OPACITY}
               >
                 <Text style={styles.methodEmoji}>{m.emoji}</Text>
                 <Text style={styles.methodLabel}>{m.label}</Text>

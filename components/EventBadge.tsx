@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { F, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import type { PosEvent } from '../db/events';
+import { PRESS_OPACITY } from '../constants/motion';
 
 type Props = {
   /** The event this device is logging sales to (the sticky pick or sole event). */
@@ -36,7 +37,7 @@ export function EventBadge({ event, mustPick = false, switchable = false, onPres
       <TouchableOpacity
         style={styles.pickChip}
         onPress={onPress}
-        activeOpacity={0.8}
+        activeOpacity={PRESS_OPACITY}
         accessibilityRole="button"
         accessibilityLabel="Several events today. Tap to pick which one this device logs sales to."
       >
@@ -53,7 +54,7 @@ export function EventBadge({ event, mustPick = false, switchable = false, onPres
       <TouchableOpacity
         style={styles.idleChip}
         onPress={onPress}
-        activeOpacity={0.8}
+        activeOpacity={PRESS_OPACITY}
         accessibilityRole="button"
         accessibilityLabel="No event today. Tap to set up or schedule an event."
       >
@@ -71,7 +72,7 @@ export function EventBadge({ event, mustPick = false, switchable = false, onPres
     <TouchableOpacity
       style={styles.chip}
       onPress={onPress}
-      activeOpacity={0.8}
+      activeOpacity={PRESS_OPACITY}
       accessibilityRole="button"
       accessibilityLabel={
         switchable

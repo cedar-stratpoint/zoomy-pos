@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, Pressable } from 'react-native';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { PRESS_OPACITY_PRIMARY } from '../constants/motion';
 
 type Props = {
   visible: boolean;
@@ -37,7 +38,7 @@ export function ConfirmModal({ visible, title, message, confirmLabel, destructiv
               testID="confirm-modal-cancel"
               style={[styles.btn, styles.cancel]}
               onPress={onCancel}
-              activeOpacity={0.85}
+              activeOpacity={PRESS_OPACITY_PRIMARY}
             >
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
@@ -45,7 +46,7 @@ export function ConfirmModal({ visible, title, message, confirmLabel, destructiv
               testID="confirm-modal-confirm"
               style={[styles.btn, destructive ? styles.destructive : styles.confirm]}
               onPress={onConfirm}
-              activeOpacity={0.85}
+              activeOpacity={PRESS_OPACITY_PRIMARY}
             >
               <Text style={styles.confirmText}>{confirmLabel}</Text>
             </TouchableOpacity>

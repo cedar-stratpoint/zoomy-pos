@@ -10,6 +10,7 @@ import {
   setSelectedEventId,
   type PosEvent,
 } from '../../db/events';
+import { PRESS_OPACITY_PRIMARY } from '../../constants/motion';
 
 /**
  * Event picker (multi-event). When two or more events run today the cashier must
@@ -74,7 +75,7 @@ export default function EventPickerModal() {
                 key={e.event_id}
                 style={[styles.row, isSel && styles.rowSel]}
                 onPress={() => choose(e)}
-                activeOpacity={0.85}
+                activeOpacity={PRESS_OPACITY_PRIMARY}
                 accessibilityRole="button"
                 accessibilityLabel={`Log sales to ${label}${isSel ? ', currently selected' : ''}`}
               >
@@ -91,7 +92,7 @@ export default function EventPickerModal() {
         <TouchableOpacity
           style={styles.secondaryBtn}
           onPress={() => router.replace('/modals/event-setup')}
-          activeOpacity={0.85}
+          activeOpacity={PRESS_OPACITY_PRIMARY}
         >
           <Text style={styles.secondaryBtnText}>Schedule another event</Text>
         </TouchableOpacity>

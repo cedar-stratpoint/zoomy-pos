@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { ScrollView, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { F, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { PRESS_OPACITY } from '../constants/motion';
 
 type Props = {
   categories: string[];
@@ -32,7 +33,7 @@ export function CategoryTabs({ categories, active, onSelect }: Props) {
             testID={`category-tab-${cat}`}
             style={[styles.pill, on && styles.pillActive]}
             onPress={() => onSelect(cat)}
-            activeOpacity={0.7}
+            activeOpacity={PRESS_OPACITY}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
           >
