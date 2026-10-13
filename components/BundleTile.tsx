@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { TouchableOpacity, Text, View, StyleSheet } from 'react-native';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { PRESS_OPACITY } from '../constants/motion';
 
 type Props = {
   id: number;
@@ -27,7 +28,7 @@ export function BundleTile({ id, name, price, lineEmojis, onPress }: Props) {
       testID="bundle-tile"
       style={styles.tile}
       onPress={() => onPress(id)}
-      activeOpacity={0.7}
+      activeOpacity={PRESS_OPACITY}
       accessibilityRole="button"
       accessibilityLabel={`${name}, ₱${price.toFixed(2)}`}
     >

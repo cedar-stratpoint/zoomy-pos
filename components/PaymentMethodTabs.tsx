@@ -4,6 +4,7 @@ import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import type { PaymentMethod } from '../db/transactions';
 import { QUICK_PAYMENT_METHODS } from '../constants/payment';
+import { PRESS_OPACITY } from '../constants/motion';
 
 type Props = {
   /** Currently selected quick method. */
@@ -43,7 +44,7 @@ export function PaymentMethodTabs({ value, onChange, items, disabled, compact }:
             accessibilityRole="button"
             accessibilityState={{ selected: active, disabled }}
             accessibilityLabel={`Pay with ${m.label}`}
-            activeOpacity={0.8}
+            activeOpacity={PRESS_OPACITY}
           >
             <Text
               style={[styles.tabText, active && styles.tabTextActive]}

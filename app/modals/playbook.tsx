@@ -10,6 +10,7 @@ import { ProductNoteCard } from '../../components/playbook/ProductNoteCard';
 import { QuickGuide } from '../../components/playbook/QuickGuide';
 import { TourTarget, MaybeTourTarget } from '../../components/tour/TourTarget';
 import { useTourScene } from '../../context/TourContext';
+import { PRESS_OPACITY } from '../../constants/motion';
 
 type Tab = 'flow' | 'products';
 
@@ -39,7 +40,7 @@ export default function PlaybookScreen() {
             testID={`playbook-tab-${t}`}
             style={[styles.tab, tab === t && styles.tabActive]}
             onPress={() => setTab(t)}
-            activeOpacity={0.7}
+            activeOpacity={PRESS_OPACITY}
             accessibilityRole="tab"
             accessibilityState={{ selected: tab === t }}
           >

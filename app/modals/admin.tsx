@@ -20,6 +20,7 @@ import { parseCatalog, ParseError } from '../../utils/products-csv-format';
 import { makeImageResolver } from '../../utils/import-images';
 import { upsertCatalog, type ImportSummary } from '../../db/catalog-import';
 import { useToast } from '../../components/Toast';
+import { PRESS_OPACITY } from '../../constants/motion';
 
 type Step = 'verify' | 'new_pin' | 'settings';
 
@@ -382,7 +383,7 @@ export default function AdminModal() {
           key={key}
           style={[styles.key, key === 'confirm' && styles.keyConfirm]}
           onPress={() => handleKey(key)}
-          activeOpacity={0.7}
+          activeOpacity={PRESS_OPACITY}
         >
           {key === 'backspace' ? (
             <Ionicons name="backspace-outline" size={F.xl} color={colors.textPrimary} />

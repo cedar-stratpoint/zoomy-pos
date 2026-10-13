@@ -28,6 +28,7 @@ import {
 } from '../../utils/catalog-filter';
 import { formatRelativeTime } from '../../utils/format-relative-time';
 import { refreshPendingCount } from '../../utils/outbox';
+import { PRESS_OPACITY, PRESS_OPACITY_PRIMARY } from '../../constants/motion';
 
 type Selection = { category: string | null; subcategory: string | null };
 
@@ -322,7 +323,7 @@ export default function FreeTasteModal() {
         testID="free-taste-tab-record"
         style={[styles.tab, mode === 'record' && styles.tabActive]}
         onPress={() => setMode('record')}
-        activeOpacity={0.7}
+        activeOpacity={PRESS_OPACITY}
       >
         <Text style={[styles.tabLabel, mode === 'record' && styles.tabLabelActive]}>Record</Text>
       </TouchableOpacity>
@@ -330,7 +331,7 @@ export default function FreeTasteModal() {
         testID="free-taste-tab-recent"
         style={[styles.tab, mode === 'recent' && styles.tabActive]}
         onPress={showRecent}
-        activeOpacity={0.7}
+        activeOpacity={PRESS_OPACITY}
       >
         <Text style={[styles.tabLabel, mode === 'recent' && styles.tabLabelActive]}>Recent</Text>
       </TouchableOpacity>
@@ -375,7 +376,7 @@ export default function FreeTasteModal() {
                   style={[styles.undoBtn, busy && styles.undoBtnDisabled]}
                   onPress={() => undo(item)}
                   disabled={busy}
-                  activeOpacity={0.7}
+                  activeOpacity={PRESS_OPACITY}
                 >
                   <Text style={styles.undoText}>{busy ? 'Undoing…' : 'Undo'}</Text>
                 </TouchableOpacity>
@@ -484,7 +485,7 @@ export default function FreeTasteModal() {
           style={[styles.primaryBtn, (totalPacks === 0 || submitting) && styles.primaryBtnDisabled]}
           onPress={submit}
           disabled={totalPacks === 0 || submitting}
-          activeOpacity={0.85}
+          activeOpacity={PRESS_OPACITY_PRIMARY}
         >
           <Text style={[styles.primaryBtnText, (totalPacks === 0 || submitting) && styles.primaryBtnTextDisabled]}>
             {totalPacks === 0 ? 'Add a pack to record' : `Record ${totalPacks} pack${totalPacks !== 1 ? 's' : ''}`}
