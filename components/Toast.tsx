@@ -12,6 +12,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { DURATION, EASE_OUT } from '../constants/motion';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 export type ToastVariant = 'success' | 'error';
 
@@ -39,67 +41,96 @@ type VisibleToast = ToastInput & { id: number };
 
 const SUCCESS_DURATION_MS = 3000;
 const ERROR_DURATION_MS = 5000;
-const ANIM_DURATION_MS = 180;
+/** How far the toast drops in from. Skipped under reduced motion. */
+const ENTER_OFFSET = -16;
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [toast, setToast] = useState<VisibleToast | null>(null);
-  const progress = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextId = useRef(0);
+  const showing = useRef(false);
   const insets = useSafeAreaInsets();
+  const reduced = useReducedMotion();
+  const reducedRef = useRef(reduced);
+  reducedRef.current = reduced;
 
-  const dismiss = useCallback(() => {
+  const clearHideTimer = () => {
     if (hideTimer.current) {
       clearTimeout(hideTimer.current);
       hideTimer.current = null;
     }
-    Animated.timing(progress, {
-      toValue: 0,
-      duration: ANIM_DURATION_MS,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (finished) setToast(null);
+  };
+
+  // Exit is quicker and subtler than the enter: fade only, no travel.
+  const fadeOut = useCallback(
+    (onDone: () => void) => {
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: DURATION.toastOut,
+        easing: EASE_OUT,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) onDone();
+      });
+    },
+    [opacity]
+  );
+
+  const dismiss = useCallback(() => {
+    clearHideTimer();
+    fadeOut(() => {
+      showing.current = false;
+      setToast(null);
     });
-  }, [progress]);
+  }, [fadeOut]);
+
+  const enter = useCallback(
+    (next: VisibleToast) => {
+      setToast(next);
+      showing.current = true;
+      opacity.setValue(0);
+      translateY.setValue(reducedRef.current ? 0 : ENTER_OFFSET);
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: DURATION.toastIn, easing: EASE_OUT, useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: 0, duration: DURATION.toastIn, easing: EASE_OUT, useNativeDriver: true }),
+      ]).start();
+    },
+    [opacity, translateY]
+  );
 
   const showToast = useCallback(
     (input: ToastInput) => {
-      if (hideTimer.current) {
-        clearTimeout(hideTimer.current);
-        hideTimer.current = null;
-      }
-      progress.setValue(0);
+      clearHideTimer();
       const id = ++nextId.current;
-      setToast({ ...input, id });
-      Animated.timing(progress, {
-        toValue: 1,
-        duration: ANIM_DURATION_MS,
-        useNativeDriver: true,
-      }).start();
+      const next = { ...input, id };
+      // A toast already on screen hands off (fade the old one, then drop the
+      // new one in) instead of hard-cutting, e.g. "Sale recorded" followed by
+      // "Not synced to Coop". Only the latest request wins a rapid burst.
+      if (showing.current) {
+        fadeOut(() => {
+          if (id === nextId.current) enter(next);
+        });
+      } else {
+        enter(next);
+      }
       const duration =
         input.variant === 'error' ? ERROR_DURATION_MS : SUCCESS_DURATION_MS;
       hideTimer.current = setTimeout(() => {
         dismiss();
       }, duration);
     },
-    [progress, dismiss]
+    [fadeOut, enter, dismiss]
   );
 
   useEffect(() => {
-    return () => {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-    };
+    return () => clearHideTimer();
   }, []);
 
   const ctxValue = useMemo(() => ({ showToast }), [showToast]);
-
-  const translateY = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-16, 0],
-  });
-  const opacity = progress;
 
   const isError = toast?.variant === 'error';
   const accent = isError ? colors.red : colors.green;

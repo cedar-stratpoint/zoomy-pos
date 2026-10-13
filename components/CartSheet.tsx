@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { DURATION, EASE_SHEET } from '../constants/motion';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useCart } from '../context/CartContext';
 import { CartPanel } from './CartPanel';
 import { PaymentMethodTabs } from './PaymentMethodTabs';
@@ -39,6 +41,11 @@ export function CartSheet({ method, onMethodChange, enabledMethods, petType, onP
   const { height } = useWindowDimensions();
   const sheetHeight = Math.min(height * 0.7, 520);
   const [expanded, setExpanded] = useState(false);
+  // Read through a ref: the pan responders below are created once and would
+  // otherwise keep the first render's value.
+  const reducedMotion = useReducedMotion();
+  const reduced = useRef(reducedMotion);
+  reduced.current = reducedMotion;
   const translateY = useRef(new Animated.Value(sheetHeight)).current;
 
   // Cross-fade the collapsed peek against the sheet position: fully visible when
@@ -54,10 +61,13 @@ export function CartSheet({ method, onMethodChange, enabledMethods, petType, onP
 
   const cartCount = bundles.length + items.reduce((s, i) => s + i.quantity, 0);
 
+  // Settles on the iOS sheet curve. Under reduced motion it jumps to place;
+  // a drag still follows the finger since the user is driving it.
   const animateTo = (to: number, onDone?: () => void) => {
     Animated.timing(translateY, {
       toValue: to,
-      duration: 220,
+      duration: reduced.current ? 0 : to === 0 ? DURATION.sheetIn : DURATION.sheetOut,
+      easing: EASE_SHEET,
       useNativeDriver: true,
     }).start(onDone);
   };
