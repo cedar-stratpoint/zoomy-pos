@@ -15,6 +15,7 @@ import {
 } from '../../db/events';
 import { newEventId } from '../../utils/events-sync';
 import { drainOutbox } from '../../utils/outbox';
+import { PRESS_OPACITY_PRIMARY } from '../../constants/motion';
 
 /**
  * Event setup sheet (opened from the header event chip). One full form for both
@@ -254,16 +255,16 @@ export default function EventSetupModal() {
           </>
         )}
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={save} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={save} activeOpacity={PRESS_OPACITY_PRIMARY}>
           <Text style={styles.primaryBtnText}>{creating ? 'Create event' : 'Save changes'}</Text>
         </TouchableOpacity>
 
         {creating && active ? (
-          <TouchableOpacity style={styles.secondaryBtn} onPress={cancelCreate} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={cancelCreate} activeOpacity={PRESS_OPACITY_PRIMARY}>
             <Text style={styles.secondaryBtnText}>Cancel</Text>
           </TouchableOpacity>
         ) : !creating ? (
-          <TouchableOpacity style={styles.secondaryBtn} onPress={startCreate} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={startCreate} activeOpacity={PRESS_OPACITY_PRIMARY}>
             <Text style={styles.secondaryBtnText}>Schedule another event</Text>
           </TouchableOpacity>
         ) : null}

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { ScrollView, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { F, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { PRESS_OPACITY } from '../constants/motion';
 
 type Props = {
   subcategories: string[];
@@ -33,7 +34,7 @@ export function SubcategoryFilter({ subcategories, active, onSelect }: Props) {
             testID={`subcategory-chip-${sub}`}
             style={[styles.chip, on && styles.chipActive]}
             onPress={() => onSelect(sub)}
-            activeOpacity={0.7}
+            activeOpacity={PRESS_OPACITY}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
           >

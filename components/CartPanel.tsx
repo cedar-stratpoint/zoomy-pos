@@ -9,6 +9,7 @@ import { quickMethodMeta } from '../constants/payment';
 import { PaymentMethodTabs } from './PaymentMethodTabs';
 import { PetTypeChips } from './PetTypeChips';
 import { TourTarget } from './tour/TourTarget';
+import { PRESS_OPACITY_PRIMARY } from '../constants/motion';
 
 type Props = {
   /** Selected quick payment method. */
@@ -173,7 +174,7 @@ export function CartPanel({ method, onMethodChange, enabledMethods, petType, onP
             style={[styles.charge, isEmpty && styles.chargeDisabled, tight && styles.chargeTight]}
             disabled={isEmpty}
             onPress={onCharge}
-            activeOpacity={0.85}
+            activeOpacity={PRESS_OPACITY_PRIMARY}
           >
             <Text style={[styles.chargeText, isEmpty && styles.chargeTextDisabled]}>{meta.emoji}  {meta.label} · Pay</Text>
           </TouchableOpacity>

@@ -40,6 +40,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { F, R, type Palette } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { TourTarget } from '../../components/tour/TourTarget';
+import { Sheet } from '../../components/Sheet';
+import { PRESS_OPACITY } from '../../constants/motion';
 
 // Payment methods offered in the edit form.
 const EDIT_METHODS: PaymentMethod[] = ['cash', 'qrph', 'gcash', 'maya', 'card'];
@@ -176,7 +178,7 @@ function Dropdown<T extends string>({
 
   return (
     <View style={styles.ddWrap}>
-      <TouchableOpacity ref={triggerRef} style={styles.ddTrigger} onPress={handleOpen} activeOpacity={0.7}>
+      <TouchableOpacity ref={triggerRef} style={styles.ddTrigger} onPress={handleOpen} activeOpacity={PRESS_OPACITY}>
         {leadingIcon && <Ionicons name={leadingIcon} size={F.sm} color={colors.textSecondary} />}
         <Text style={styles.ddTriggerText} numberOfLines={1}>{displayLabel}</Text>
         <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={F.sm} color={colors.textMuted} />
@@ -193,7 +195,7 @@ function Dropdown<T extends string>({
                     key={opt.key}
                     style={[styles.ddItem, active && styles.ddItemActive]}
                     onPress={() => { setOpen(false); onSelect(opt.key); }}
-                    activeOpacity={0.7}
+                    activeOpacity={PRESS_OPACITY}
                   >
                     {opt.iconName && (
                       <Ionicons name={opt.iconName} size={F.sm} color={active ? colors.pink : colors.textMuted} />
@@ -1023,7 +1025,7 @@ export default function TransactionsModal() {
             if (importResultTimer.current) clearTimeout(importResultTimer.current);
             setImportResult(null);
           }}
-          activeOpacity={0.8}
+          activeOpacity={PRESS_OPACITY}
         >
           <View style={styles.importBannerContent}>
             <Text style={styles.importBannerTitle}>{importResult.title}</Text>
@@ -1059,162 +1061,153 @@ export default function TransactionsModal() {
       </PullToRefresh>
       </TourTarget>
 
-      <Modal
-        visible={!!selected}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSelected(null)}
-      >
-        <View style={styles.overlay}>
-          <View style={styles.sheet}>
-            {selected && (
-              <>
-                <Text style={styles.sheetTitle}>
-                  {isLocalTransaction(selected) ? `Transaction #${selected.id}` : 'Transaction'}
+      <Sheet visible={!!selected} onRequestClose={() => setSelected(null)} backdropColor="rgba(0,0,0,0.75)" style={styles.sheet}>
+        {selected && (
+          <>
+            <Text style={styles.sheetTitle}>
+              {isLocalTransaction(selected) ? `Transaction #${selected.id}` : 'Transaction'}
+            </Text>
+            <View style={styles.sheetMeta}>
+              <Text style={styles.sheetTime}>
+                {new Date(selected.created_at).toLocaleString()}
+              </Text>
+              <View style={styles.sheetMethodBadge}>
+                <Text style={styles.sheetMethodText}>
+                  {getMethodDisplayName(selected.payment_method)}
                 </Text>
-                <View style={styles.sheetMeta}>
-                  <Text style={styles.sheetTime}>
-                    {new Date(selected.created_at).toLocaleString()}
-                  </Text>
-                  <View style={styles.sheetMethodBadge}>
-                    <Text style={styles.sheetMethodText}>
-                      {getMethodDisplayName(selected.payment_method)}
-                    </Text>
-                  </View>
-                  {selected.is_bundle && (
-                    <View style={styles.sheetBundleBadge}>
-                      <Text style={styles.sheetBundleText}>Bundle</Text>
-                    </View>
-                  )}
+              </View>
+              {selected.is_bundle && (
+                <View style={styles.sheetBundleBadge}>
+                  <Text style={styles.sheetBundleText}>Bundle</Text>
                 </View>
+              )}
+            </View>
 
-                {selected.items.map((item) => (
-                  <View key={item.id} style={styles.itemRow}>
-                    <Text style={styles.itemName}>
-                      {item.variant_name
-                        ? `${item.product_name} — ${item.variant_name} × ${item.quantity}`
-                        : `${item.product_name} × ${item.quantity}`}
-                    </Text>
-                    {!selected.is_bundle && (
-                      <Text style={styles.itemPrice}>
-                        ₱{(item.price * item.quantity).toFixed(2)}
-                      </Text>
-                    )}
+            {selected.items.map((item) => (
+              <View key={item.id} style={styles.itemRow}>
+                <Text style={styles.itemName}>
+                  {item.variant_name
+                    ? `${item.product_name} — ${item.variant_name} × ${item.quantity}`
+                    : `${item.product_name} × ${item.quantity}`}
+                </Text>
+                {!selected.is_bundle && (
+                  <Text style={styles.itemPrice}>
+                    ₱{(item.price * item.quantity).toFixed(2)}
+                  </Text>
+                )}
+              </View>
+            ))}
+
+            {detailPrizes.length > 0 && (
+              <>
+                <View style={styles.divider} />
+                <Text style={styles.prizeSectionLabel}>FREE ITEMS WON</Text>
+                {detailPrizes.map((p, i) => (
+                  <View key={`${p.product_name}-${i}`} style={styles.prizeDetailRow}>
+                    <Ionicons name="gift-outline" size={F.sm} color={colors.pink} />
+                    <Text style={styles.prizeDetailText}>{p.qty}x {p.product_name}</Text>
                   </View>
                 ))}
+              </>
+            )}
 
-                {detailPrizes.length > 0 && (
-                  <>
-                    <View style={styles.divider} />
-                    <Text style={styles.prizeSectionLabel}>FREE ITEMS WON</Text>
-                    {detailPrizes.map((p, i) => (
-                      <View key={`${p.product_name}-${i}`} style={styles.prizeDetailRow}>
-                        <Ionicons name="gift-outline" size={F.sm} color={colors.pink} />
-                        <Text style={styles.prizeDetailText}>{p.qty}x {p.product_name}</Text>
-                      </View>
-                    ))}
-                  </>
-                )}
+            <View style={styles.divider} />
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Total</Text>
+              <Text style={styles.summaryValue}>₱{selected.total.toFixed(2)}</Text>
+            </View>
+            {selected.payment_method === 'cash' && (
+              <>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Cash</Text>
+                  <Text style={styles.summaryValue}>₱{selected.cash_tendered.toFixed(2)}</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Change</Text>
+                  <Text style={styles.summaryValue}>₱{selected.change.toFixed(2)}</Text>
+                </View>
+              </>
+            )}
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Payment</Text>
+              <Text style={styles.summaryValue}>
+                {getMethodDisplayName(selected.payment_method)}
+              </Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Event</Text>
+              <Text style={[styles.summaryValue, !selected.event_id && styles.summaryValueNeutral]}>
+                {selected.event_id && eventById.get(selected.event_id)
+                  ? eventLabel(eventById.get(selected.event_id)!)
+                  : 'None'}
+              </Text>
+            </View>
 
+            {selected.payment_method !== 'cash' && (selected.ref_number || selected.proof_photo_uri) && (
+              <>
                 <View style={styles.divider} />
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Total</Text>
-                  <Text style={styles.summaryValue}>₱{selected.total.toFixed(2)}</Text>
-                </View>
-                {selected.payment_method === 'cash' && (
-                  <>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Cash</Text>
-                      <Text style={styles.summaryValue}>₱{selected.cash_tendered.toFixed(2)}</Text>
+                <Text style={styles.proofLabel}>PAYMENT PROOF</Text>
+                <View style={styles.proofRow}>
+                  {selected.ref_number && (
+                    <View style={styles.refBox}>
+                      <Text style={styles.refLabel}>REF #</Text>
+                      <Text style={styles.refValue}>{selected.ref_number}</Text>
                     </View>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Change</Text>
-                      <Text style={styles.summaryValue}>₱{selected.change.toFixed(2)}</Text>
-                    </View>
-                  </>
-                )}
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Payment</Text>
-                  <Text style={styles.summaryValue}>
-                    {getMethodDisplayName(selected.payment_method)}
-                  </Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Event</Text>
-                  <Text style={[styles.summaryValue, !selected.event_id && styles.summaryValueNeutral]}>
-                    {selected.event_id && eventById.get(selected.event_id)
-                      ? eventLabel(eventById.get(selected.event_id)!)
-                      : 'None'}
-                  </Text>
-                </View>
-
-                {selected.payment_method !== 'cash' && (selected.ref_number || selected.proof_photo_uri) && (
-                  <>
-                    <View style={styles.divider} />
-                    <Text style={styles.proofLabel}>PAYMENT PROOF</Text>
-                    <View style={styles.proofRow}>
-                      {selected.ref_number && (
-                        <View style={styles.refBox}>
-                          <Text style={styles.refLabel}>REF #</Text>
-                          <Text style={styles.refValue}>{selected.ref_number}</Text>
-                        </View>
-                      )}
-                      {selected.proof_photo_uri && (
-                        <TouchableOpacity onPress={() => setPhotoView(selected.proof_photo_uri)}>
-                          <Image source={{ uri: selected.proof_photo_uri }} style={styles.proofThumb} />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </>
-                )}
-
-                {selected.customer_handle && (
-                  <>
-                    <View style={styles.divider} />
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Furbaby / IG</Text>
-                      <Text style={[styles.summaryValue, { color: colors.pink }]}>{selected.customer_handle}</Text>
-                    </View>
-                  </>
-                )}
-
-                {selected.remarks && (
-                  <>
-                    <View style={styles.divider} />
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Remarks</Text>
-                      <Text style={[styles.summaryValue, { flex: 1, textAlign: 'right' }]}>{selected.remarks}</Text>
-                    </View>
-                  </>
-                )}
-
-                <View style={styles.sheetBtns}>
-                  <TouchableOpacity style={styles.closeBtn} onPress={() => setSelected(null)}>
-                    <Text style={styles.closeBtnText}>Close</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.remarksBtn} onPress={openRemarksModal}>
-                    <Text style={styles.remarksBtnText} numberOfLines={1}>{selected.remarks ? '✎ Remarks' : '+ Remarks'}</Text>
-                  </TouchableOpacity>
-                  {canEdit && (
-                    <TouchableOpacity style={styles.editBtn} onPress={openEdit}>
-                      <Text style={styles.editBtnText}>Edit</Text>
-                    </TouchableOpacity>
                   )}
-                  {canVoid && (
-                    <TouchableOpacity style={styles.voidBtn} onPress={handleVoid}>
-                      <Text style={styles.voidBtnText}>Void</Text>
-                    </TouchableOpacity>
-                  )}
-                  {canUnvoid && (
-                    <TouchableOpacity style={styles.unvoidBtn} onPress={handleUnvoid}>
-                      <Text style={styles.unvoidBtnText}>Unvoid</Text>
+                  {selected.proof_photo_uri && (
+                    <TouchableOpacity onPress={() => setPhotoView(selected.proof_photo_uri)}>
+                      <Image source={{ uri: selected.proof_photo_uri }} style={styles.proofThumb} />
                     </TouchableOpacity>
                   )}
                 </View>
               </>
             )}
-          </View>
-        </View>
+
+            {selected.customer_handle && (
+              <>
+                <View style={styles.divider} />
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Furbaby / IG</Text>
+                  <Text style={[styles.summaryValue, { color: colors.pink }]}>{selected.customer_handle}</Text>
+                </View>
+              </>
+            )}
+
+            {selected.remarks && (
+              <>
+                <View style={styles.divider} />
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Remarks</Text>
+                  <Text style={[styles.summaryValue, { flex: 1, textAlign: 'right' }]}>{selected.remarks}</Text>
+                </View>
+              </>
+            )}
+
+            <View style={styles.sheetBtns}>
+              <TouchableOpacity style={styles.closeBtn} onPress={() => setSelected(null)}>
+                <Text style={styles.closeBtnText}>Close</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.remarksBtn} onPress={openRemarksModal}>
+                <Text style={styles.remarksBtnText} numberOfLines={1}>{selected.remarks ? '✎ Remarks' : '+ Remarks'}</Text>
+              </TouchableOpacity>
+              {canEdit && (
+                <TouchableOpacity style={styles.editBtn} onPress={openEdit}>
+                  <Text style={styles.editBtnText}>Edit</Text>
+                </TouchableOpacity>
+              )}
+              {canVoid && (
+                <TouchableOpacity style={styles.voidBtn} onPress={handleVoid}>
+                  <Text style={styles.voidBtnText}>Void</Text>
+                </TouchableOpacity>
+              )}
+              {canUnvoid && (
+                <TouchableOpacity style={styles.unvoidBtn} onPress={handleUnvoid}>
+                  <Text style={styles.unvoidBtnText}>Unvoid</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </>
+        )}
         <PhotoViewer uri={photoView} onClose={() => setPhotoView(null)} />
 
         <Modal
@@ -1247,250 +1240,246 @@ export default function TransactionsModal() {
             </View>
           </View>
         </Modal>
-      </Modal>
+      </Sheet>
 
       {/* Edit sale (online-only). Reconciles stock + total on Coop via the RPC. */}
-      <Modal visible={!!editingTx} transparent animationType="slide" onRequestClose={() => setEditingTx(null)}>
-        <View style={styles.editOverlay}>
-          <View style={styles.editSheet}>
-            <Text style={styles.editTitle}>Edit sale</Text>
-            <ScrollView style={styles.editScroll} keyboardShouldPersistTaps="handled">
-              <Text style={styles.editSectionLabel}>Payment method</Text>
-              <View style={styles.methodRow}>
-                {EDIT_METHODS.map((m) => (
-                  <TouchableOpacity
-                    key={m}
-                    style={[styles.methodPill, editMethod === m && styles.methodPillActive]}
-                    onPress={() => setEditMethod(m)}
-                  >
-                    <Text style={[styles.methodPillText, editMethod === m && styles.methodPillTextActive]}>
-                      {quickMethodMeta(m).label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+      <Sheet visible={!!editingTx} onRequestClose={() => setEditingTx(null)} style={styles.editSheet}>
+        <Text style={styles.editTitle}>Edit sale</Text>
+        <ScrollView style={styles.editScroll} keyboardShouldPersistTaps="handled">
+          <Text style={styles.editSectionLabel}>Payment method</Text>
+          <View style={styles.methodRow}>
+            {EDIT_METHODS.map((m) => (
+              <TouchableOpacity
+                key={m}
+                style={[styles.methodPill, editMethod === m && styles.methodPillActive]}
+                onPress={() => setEditMethod(m)}
+              >
+                <Text style={[styles.methodPillText, editMethod === m && styles.methodPillTextActive]}>
+                  {quickMethodMeta(m).label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-              <Text style={styles.editSectionLabel}>Furbaby / IG handle</Text>
-              <TextInput
-                style={styles.editInput}
-                placeholder="@username or name"
-                placeholderTextColor={colors.textMuted}
-                value={editHandle}
-                onChangeText={setEditHandle}
-                autoCapitalize="none"
-                autoCorrect={false}
+          <Text style={styles.editSectionLabel}>Furbaby / IG handle</Text>
+          <TextInput
+            style={styles.editInput}
+            placeholder="@username or name"
+            placeholderTextColor={colors.textMuted}
+            value={editHandle}
+            onChangeText={setEditHandle}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          <Text style={styles.editSectionLabel}>Pet type</Text>
+          <PetTypeChips value={editPetType} onChange={setEditPetType} />
+
+          {editEventCandidates.length >= 2 && (
+            <>
+              <Text style={styles.editSectionLabel}>Event</Text>
+              <Dropdown
+                options={editEventOptions}
+                selectedKey={editEventId}
+                displayLabel={editEventOptions.find((o) => o.key === editEventId)?.label ?? 'None'}
+                onSelect={setEditEventId}
               />
+            </>
+          )}
 
-              <Text style={styles.editSectionLabel}>Pet type</Text>
-              <PetTypeChips value={editPetType} onChange={setEditPetType} />
-
-              {editEventCandidates.length >= 2 && (
-                <>
-                  <Text style={styles.editSectionLabel}>Event</Text>
-                  <Dropdown
-                    options={editEventOptions}
-                    selectedKey={editEventId}
-                    displayLabel={editEventOptions.find((o) => o.key === editEventId)?.label ?? 'None'}
-                    onSelect={setEditEventId}
-                  />
-                </>
-              )}
-
-              <Text style={styles.editSectionLabel}>Items &amp; bundles</Text>
-              {editEntries.map((e, i) => e.kind === 'item' ? (
-                <View key={`i-${i}`} style={styles.editLineRow}>
-                  <TouchableOpacity style={styles.editLineNamePick} onPress={() => setPickerTarget({ kind: 'set-item', idx: i })}>
-                    <Text style={styles.editLineName} numberOfLines={2}>{e.name || 'Select product…'}</Text>
-                  </TouchableOpacity>
-                  <TextInput
-                    style={styles.editQtyInput} keyboardType="number-pad" value={e.qty}
-                    onChangeText={(v) => patchEntry(i, { ...e, qty: v.replace(/[^0-9]/g, '') })}
-                    accessibilityLabel={`Quantity for ${e.name}`}
-                  />
-                  <View style={styles.editPriceWrap}>
-                    <Text style={styles.editPricePeso}>₱</Text>
-                    <TextInput
-                      style={styles.editPriceInput} keyboardType="decimal-pad" value={e.price}
-                      onChangeText={(v) => patchEntry(i, { ...e, price: v.replace(/[^0-9.]/g, '') })}
-                      accessibilityLabel={`Unit price for ${e.name}`}
-                    />
-                  </View>
-                  <Text style={styles.editLineSubtotal} numberOfLines={1}>₱{entryAmount(e).toFixed(2)}</Text>
-                  <TouchableOpacity onPress={() => removeEntry(i)} style={styles.editRemoveBtn} accessibilityLabel={`Remove ${e.name}`}>
-                    <Ionicons name="close" size={16} color={colors.textMuted} />
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View key={`b-${i}`} style={styles.bundleCard}>
-                  <View style={styles.bundleCardHead}>
-                    <View style={styles.bundleBadge}><Text style={styles.bundleBadgeText}>BUNDLE</Text></View>
-                    <TouchableOpacity style={styles.bundleNamePick} onPress={() => setBundleChooserFor(i)}>
-                      <Text style={[styles.bundleName, !e.bundle_id && styles.bundleNameUnset]} numberOfLines={1}>
-                        {e.bundle_id ? e.name : 'Select bundle…'}
-                      </Text>
-                      <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
-                    </TouchableOpacity>
-                    <View style={styles.editPriceWrap}>
-                      <Text style={styles.editPricePeso}>₱</Text>
-                      <TextInput
-                        style={styles.editPriceInput} keyboardType="decimal-pad" value={e.price}
-                        onChangeText={(v) => patchEntry(i, { ...e, price: v.replace(/[^0-9.]/g, '') })}
-                        accessibilityLabel="Bundle price"
-                      />
-                    </View>
-                    <TouchableOpacity onPress={() => removeEntry(i)} style={styles.editRemoveBtn} accessibilityLabel="Remove bundle">
-                      <Ionicons name="close" size={16} color={colors.textMuted} />
-                    </TouchableOpacity>
-                  </View>
-                  {bundleDefById.get(e.bundle_id)?.bundle_type !== 'fixed' ? (
-                    <>
-                      <View style={styles.bundlePicksHead}>
-                        <Text style={styles.bundlePicksLabel}>Picks</Text>
-                        <Text style={[styles.bundlePicksCount, bundleProblem(e) ? styles.bundlePicksBad : styles.bundlePicksOk]}>
-                          {picksTotal(e.picks)}{bundleDefById.get(e.bundle_id)?.pick_count != null ? ` / ${bundleDefById.get(e.bundle_id)!.pick_count}` : ''}
-                        </Text>
-                      </View>
-                      {e.picks.map((pk, j) => {
-                        const pn = prodBySku.get(pk.product_id)?.name ?? '';
-                        return (
-                          <View key={`p-${j}`} style={styles.bundlePickRow}>
-                            <TouchableOpacity style={styles.editLineNamePick} onPress={() => setPickerTarget({ kind: 'set-pick', idx: i, pickIdx: j })}>
-                              <Text style={styles.editLineName} numberOfLines={1}>{pn || 'Select pick…'}</Text>
-                            </TouchableOpacity>
-                            <TextInput
-                              style={styles.editQtyInput} keyboardType="number-pad" value={pk.qty}
-                              onChangeText={(v) => patchEntry(i, { ...e, picks: e.picks.map((x, k) => k === j ? { ...x, qty: v.replace(/[^0-9]/g, '') } : x) })}
-                              accessibilityLabel="Pick quantity"
-                            />
-                            <TouchableOpacity onPress={() => patchEntry(i, { ...e, picks: e.picks.filter((_, k) => k !== j) })} style={styles.editRemoveBtn} accessibilityLabel="Remove pick">
-                              <Ionicons name="close" size={15} color={colors.textMuted} />
-                            </TouchableOpacity>
-                          </View>
-                        );
-                      })}
-                      <TouchableOpacity style={styles.addPickBtn} onPress={() => setPickerTarget({ kind: 'add-pick', idx: i })}>
-                        <Ionicons name="add" size={14} color={colors.pink} />
-                        <Text style={styles.addPickText}>Add pick</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <Text style={styles.bundleFixedNote} numberOfLines={2}>
-                      {(bundleDefById.get(e.bundle_id)?.items ?? []).map((it) => `${it.name} ×${it.quantity}`).join(', ') || 'Fixed bundle'}
-                    </Text>
-                  )}
-                  {bundleProblem(e) && <Text style={styles.bundleProblem}>This bundle {bundleProblem(e)}.</Text>}
-                </View>
-              ))}
-
-              <View style={styles.addRow}>
-                <TouchableOpacity style={styles.addItemBtn} onPress={() => setPickerTarget({ kind: 'add-item' })}>
-                  <Ionicons name="add" size={16} color={colors.pink} />
-                  <Text style={styles.addItemText}>Add item</Text>
-                </TouchableOpacity>
-                {bundleDefs.filter((d) => d.bundle_uuid).map((d) => (
-                  <TouchableOpacity key={d.id} style={styles.addBundleBtn} onPress={() => addBundleDef(d)}>
-                    <Ionicons name="add" size={14} color={colors.pink} />
-                    <Text style={styles.addItemText} numberOfLines={1}>{d.name}</Text>
-                  </TouchableOpacity>
-                ))}
+          <Text style={styles.editSectionLabel}>Items &amp; bundles</Text>
+          {editEntries.map((e, i) => e.kind === 'item' ? (
+            <View key={`i-${i}`} style={styles.editLineRow}>
+              <TouchableOpacity style={styles.editLineNamePick} onPress={() => setPickerTarget({ kind: 'set-item', idx: i })}>
+                <Text style={styles.editLineName} numberOfLines={2}>{e.name || 'Select product…'}</Text>
+              </TouchableOpacity>
+              <TextInput
+                style={styles.editQtyInput} keyboardType="number-pad" value={e.qty}
+                onChangeText={(v) => patchEntry(i, { ...e, qty: v.replace(/[^0-9]/g, '') })}
+                accessibilityLabel={`Quantity for ${e.name}`}
+              />
+              <View style={styles.editPriceWrap}>
+                <Text style={styles.editPricePeso}>₱</Text>
+                <TextInput
+                  style={styles.editPriceInput} keyboardType="decimal-pad" value={e.price}
+                  onChangeText={(v) => patchEntry(i, { ...e, price: v.replace(/[^0-9.]/g, '') })}
+                  accessibilityLabel={`Unit price for ${e.name}`}
+                />
               </View>
-
-              <Text style={styles.editSectionLabel}>Free items won</Text>
-              <Text style={styles.prizeHint}>
-                Spin-a-wheel prizes given on this sale. Each deducts Event stock and applies right away, separate from Save.
-              </Text>
-
-              {orderPrizes.map((prize) => {
-                const synced = !!prize.synced_at;
-                const busy = undoingPrize.has(prize.client_uuid);
-                return (
-                  <View key={prize.client_uuid} style={styles.prizeRow}>
-                    <Text style={styles.prizeName} numberOfLines={2}>{prize.qty}x {prize.product_name}</Text>
-                    <View style={[styles.prizePill, synced ? styles.prizePillSynced : styles.prizePillPending]}>
-                      <Text style={[styles.prizePillText, synced ? styles.prizePillTextSynced : styles.prizePillTextPending]}>
-                        {synced ? 'Synced' : 'Pending'}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => removePrize(prize)}
-                      disabled={busy}
-                      style={[styles.editRemoveBtn, busy && styles.prizeRemoveBusy]}
-                      accessibilityLabel={`Remove ${prize.qty}x ${prize.product_name}`}
-                    >
-                      <Ionicons name="close" size={16} color={colors.textMuted} />
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
-
-              {prizeEligible.length === 0 ? (
-                <Text style={styles.prizeEmpty}>No products have Event stock to give as a prize.</Text>
-              ) : (
-                <View style={styles.prizeAddCard}>
-                  <TouchableOpacity
-                    style={styles.prizeProductPick}
-                    onPress={() => { setPrizeSearch(''); setPrizePickerVisible(true); }}
-                  >
-                    <Text style={[styles.prizeProductText, !prizeProduct && styles.prizeProductPlaceholder]} numberOfLines={1}>
-                      {prizeProduct ? `${prizeProduct.emoji ? `${prizeProduct.emoji}  ` : ''}${prizeProduct.name}` : 'Select a product…'}
-                    </Text>
-                    <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
-                  </TouchableOpacity>
-                  {prizeProduct && <Text style={styles.prizeOnHand}>{prizeProduct.stock} on hand at the Event</Text>}
-                  <View style={styles.prizeControlRow}>
-                    <View style={styles.prizeStepper}>
-                      <TouchableOpacity
-                        style={styles.prizeStepBtn}
-                        onPress={() => setPrizeQty((q) => Math.max(1, q - 1))}
-                        disabled={!prizeProduct || prizeQty <= 1}
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                      >
-                        <Text style={[styles.prizeStepMinus, (!prizeProduct || prizeQty <= 1) && styles.prizeStepDisabled]}>−</Text>
-                      </TouchableOpacity>
-                      <Text style={styles.prizeStepQty}>{prizeProduct ? prizeQty : 0}</Text>
-                      <TouchableOpacity
-                        style={[styles.prizeStepBtn, styles.prizeStepPlus]}
-                        onPress={() => setPrizeQty((q) => Math.min(prizeMax, q + 1))}
-                        disabled={!prizeProduct || prizeQty >= prizeMax}
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                      >
-                        <Text style={[styles.prizeStepPlusText, (!prizeProduct || prizeQty >= prizeMax) && styles.prizeStepDisabled]}>+</Text>
-                      </TouchableOpacity>
-                    </View>
-                    <TouchableOpacity
-                      style={[styles.prizeAddBtn, (!prizeProduct || prizeAdding) && styles.prizeAddBtnDisabled]}
-                      onPress={addPrize}
-                      disabled={!prizeProduct || prizeAdding}
-                    >
-                      <Text style={[styles.prizeAddBtnText, (!prizeProduct || prizeAdding) && styles.prizeAddBtnTextDisabled]}>
-                        {prizeAdding ? 'Adding…' : 'Add prize'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  <TextInput
-                    style={styles.prizeNoteInput}
-                    placeholder="Note (optional)"
-                    placeholderTextColor={colors.textMuted}
-                    value={prizeNote}
-                    onChangeText={setPrizeNote}
-                  />
-                </View>
-              )}
-
-              {editError && <Text style={styles.editError}>{editError}</Text>}
-            </ScrollView>
-
-            <View style={styles.editFooter}>
-              <Text style={styles.editTotalText}>Total ₱{editTotal().toFixed(2)}</Text>
-              <View style={styles.editFooterBtns}>
-                <TouchableOpacity style={styles.editCancelBtn} onPress={() => setEditingTx(null)} disabled={editSaving}>
-                  <Text style={styles.editCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.editSaveBtn, (!editCanSave || editSaving) && styles.editSaveBtnDisabled]} onPress={handleSaveEdit} disabled={editSaving || !editCanSave}>
-                  <Text style={styles.editSaveText}>{editSaving ? 'Saving…' : 'Save'}</Text>
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.editLineSubtotal} numberOfLines={1}>₱{entryAmount(e).toFixed(2)}</Text>
+              <TouchableOpacity onPress={() => removeEntry(i)} style={styles.editRemoveBtn} accessibilityLabel={`Remove ${e.name}`}>
+                <Ionicons name="close" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
             </View>
+          ) : (
+            <View key={`b-${i}`} style={styles.bundleCard}>
+              <View style={styles.bundleCardHead}>
+                <View style={styles.bundleBadge}><Text style={styles.bundleBadgeText}>BUNDLE</Text></View>
+                <TouchableOpacity style={styles.bundleNamePick} onPress={() => setBundleChooserFor(i)}>
+                  <Text style={[styles.bundleName, !e.bundle_id && styles.bundleNameUnset]} numberOfLines={1}>
+                    {e.bundle_id ? e.name : 'Select bundle…'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
+                </TouchableOpacity>
+                <View style={styles.editPriceWrap}>
+                  <Text style={styles.editPricePeso}>₱</Text>
+                  <TextInput
+                    style={styles.editPriceInput} keyboardType="decimal-pad" value={e.price}
+                    onChangeText={(v) => patchEntry(i, { ...e, price: v.replace(/[^0-9.]/g, '') })}
+                    accessibilityLabel="Bundle price"
+                  />
+                </View>
+                <TouchableOpacity onPress={() => removeEntry(i)} style={styles.editRemoveBtn} accessibilityLabel="Remove bundle">
+                  <Ionicons name="close" size={16} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+              {bundleDefById.get(e.bundle_id)?.bundle_type !== 'fixed' ? (
+                <>
+                  <View style={styles.bundlePicksHead}>
+                    <Text style={styles.bundlePicksLabel}>Picks</Text>
+                    <Text style={[styles.bundlePicksCount, bundleProblem(e) ? styles.bundlePicksBad : styles.bundlePicksOk]}>
+                      {picksTotal(e.picks)}{bundleDefById.get(e.bundle_id)?.pick_count != null ? ` / ${bundleDefById.get(e.bundle_id)!.pick_count}` : ''}
+                    </Text>
+                  </View>
+                  {e.picks.map((pk, j) => {
+                    const pn = prodBySku.get(pk.product_id)?.name ?? '';
+                    return (
+                      <View key={`p-${j}`} style={styles.bundlePickRow}>
+                        <TouchableOpacity style={styles.editLineNamePick} onPress={() => setPickerTarget({ kind: 'set-pick', idx: i, pickIdx: j })}>
+                          <Text style={styles.editLineName} numberOfLines={1}>{pn || 'Select pick…'}</Text>
+                        </TouchableOpacity>
+                        <TextInput
+                          style={styles.editQtyInput} keyboardType="number-pad" value={pk.qty}
+                          onChangeText={(v) => patchEntry(i, { ...e, picks: e.picks.map((x, k) => k === j ? { ...x, qty: v.replace(/[^0-9]/g, '') } : x) })}
+                          accessibilityLabel="Pick quantity"
+                        />
+                        <TouchableOpacity onPress={() => patchEntry(i, { ...e, picks: e.picks.filter((_, k) => k !== j) })} style={styles.editRemoveBtn} accessibilityLabel="Remove pick">
+                          <Ionicons name="close" size={15} color={colors.textMuted} />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                  <TouchableOpacity style={styles.addPickBtn} onPress={() => setPickerTarget({ kind: 'add-pick', idx: i })}>
+                    <Ionicons name="add" size={14} color={colors.pink} />
+                    <Text style={styles.addPickText}>Add pick</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <Text style={styles.bundleFixedNote} numberOfLines={2}>
+                  {(bundleDefById.get(e.bundle_id)?.items ?? []).map((it) => `${it.name} ×${it.quantity}`).join(', ') || 'Fixed bundle'}
+                </Text>
+              )}
+              {bundleProblem(e) && <Text style={styles.bundleProblem}>This bundle {bundleProblem(e)}.</Text>}
+            </View>
+          ))}
+
+          <View style={styles.addRow}>
+            <TouchableOpacity style={styles.addItemBtn} onPress={() => setPickerTarget({ kind: 'add-item' })}>
+              <Ionicons name="add" size={16} color={colors.pink} />
+              <Text style={styles.addItemText}>Add item</Text>
+            </TouchableOpacity>
+            {bundleDefs.filter((d) => d.bundle_uuid).map((d) => (
+              <TouchableOpacity key={d.id} style={styles.addBundleBtn} onPress={() => addBundleDef(d)}>
+                <Ionicons name="add" size={14} color={colors.pink} />
+                <Text style={styles.addItemText} numberOfLines={1}>{d.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.editSectionLabel}>Free items won</Text>
+          <Text style={styles.prizeHint}>
+            Spin-a-wheel prizes given on this sale. Each deducts Event stock and applies right away, separate from Save.
+          </Text>
+
+          {orderPrizes.map((prize) => {
+            const synced = !!prize.synced_at;
+            const busy = undoingPrize.has(prize.client_uuid);
+            return (
+              <View key={prize.client_uuid} style={styles.prizeRow}>
+                <Text style={styles.prizeName} numberOfLines={2}>{prize.qty}x {prize.product_name}</Text>
+                <View style={[styles.prizePill, synced ? styles.prizePillSynced : styles.prizePillPending]}>
+                  <Text style={[styles.prizePillText, synced ? styles.prizePillTextSynced : styles.prizePillTextPending]}>
+                    {synced ? 'Synced' : 'Pending'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => removePrize(prize)}
+                  disabled={busy}
+                  style={[styles.editRemoveBtn, busy && styles.prizeRemoveBusy]}
+                  accessibilityLabel={`Remove ${prize.qty}x ${prize.product_name}`}
+                >
+                  <Ionicons name="close" size={16} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+
+          {prizeEligible.length === 0 ? (
+            <Text style={styles.prizeEmpty}>No products have Event stock to give as a prize.</Text>
+          ) : (
+            <View style={styles.prizeAddCard}>
+              <TouchableOpacity
+                style={styles.prizeProductPick}
+                onPress={() => { setPrizeSearch(''); setPrizePickerVisible(true); }}
+              >
+                <Text style={[styles.prizeProductText, !prizeProduct && styles.prizeProductPlaceholder]} numberOfLines={1}>
+                  {prizeProduct ? `${prizeProduct.emoji ? `${prizeProduct.emoji}  ` : ''}${prizeProduct.name}` : 'Select a product…'}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
+              </TouchableOpacity>
+              {prizeProduct && <Text style={styles.prizeOnHand}>{prizeProduct.stock} on hand at the Event</Text>}
+              <View style={styles.prizeControlRow}>
+                <View style={styles.prizeStepper}>
+                  <TouchableOpacity
+                    style={styles.prizeStepBtn}
+                    onPress={() => setPrizeQty((q) => Math.max(1, q - 1))}
+                    disabled={!prizeProduct || prizeQty <= 1}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Text style={[styles.prizeStepMinus, (!prizeProduct || prizeQty <= 1) && styles.prizeStepDisabled]}>−</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.prizeStepQty}>{prizeProduct ? prizeQty : 0}</Text>
+                  <TouchableOpacity
+                    style={[styles.prizeStepBtn, styles.prizeStepPlus]}
+                    onPress={() => setPrizeQty((q) => Math.min(prizeMax, q + 1))}
+                    disabled={!prizeProduct || prizeQty >= prizeMax}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Text style={[styles.prizeStepPlusText, (!prizeProduct || prizeQty >= prizeMax) && styles.prizeStepDisabled]}>+</Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  style={[styles.prizeAddBtn, (!prizeProduct || prizeAdding) && styles.prizeAddBtnDisabled]}
+                  onPress={addPrize}
+                  disabled={!prizeProduct || prizeAdding}
+                >
+                  <Text style={[styles.prizeAddBtnText, (!prizeProduct || prizeAdding) && styles.prizeAddBtnTextDisabled]}>
+                    {prizeAdding ? 'Adding…' : 'Add prize'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={styles.prizeNoteInput}
+                placeholder="Note (optional)"
+                placeholderTextColor={colors.textMuted}
+                value={prizeNote}
+                onChangeText={setPrizeNote}
+              />
+            </View>
+          )}
+
+          {editError && <Text style={styles.editError}>{editError}</Text>}
+        </ScrollView>
+
+        <View style={styles.editFooter}>
+          <Text style={styles.editTotalText}>Total ₱{editTotal().toFixed(2)}</Text>
+          <View style={styles.editFooterBtns}>
+            <TouchableOpacity style={styles.editCancelBtn} onPress={() => setEditingTx(null)} disabled={editSaving}>
+              <Text style={styles.editCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.editSaveBtn, (!editCanSave || editSaving) && styles.editSaveBtnDisabled]} onPress={handleSaveEdit} disabled={editSaving || !editCanSave}>
+              <Text style={styles.editSaveText}>{editSaving ? 'Saving…' : 'Save'}</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -1568,7 +1557,7 @@ export default function TransactionsModal() {
             </View>
           </View>
         </Modal>
-      </Modal>
+      </Sheet>
 
       <CalendarRangeModal
         visible={calendarVisible}
@@ -1657,7 +1646,6 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   list: { padding: 16, paddingTop: 10 },
   empty: { color: c.textMuted, textAlign: 'center', marginTop: 40, fontSize: F.md },
 
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: c.surface,
     borderTopLeftRadius: R.xl,
@@ -1731,7 +1719,6 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   unvoidBtnText: { color: c.green, fontWeight: '800', fontSize: F.md },
 
   // Edit-sale modal
-  editOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   editSheet: {
     backgroundColor: c.surface, borderTopLeftRadius: R.lg, borderTopRightRadius: R.lg,
     paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16,

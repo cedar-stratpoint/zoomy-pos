@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { F, type Palette } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
+import { PRESS_OPACITY } from '../../constants/motion';
 
 type Option<K extends string> = { key: K; label: string };
 
@@ -27,7 +28,7 @@ export function ChipRow<K extends string>({ options, value, onChange, testIDPref
             testID={`${testIDPrefix}-${o.key}`}
             style={[styles.chip, active && styles.chipActive]}
             onPress={() => onChange(o.key)}
-            activeOpacity={0.7}
+            activeOpacity={PRESS_OPACITY}
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
           >
