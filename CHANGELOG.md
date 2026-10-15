@@ -12,6 +12,67 @@ Dates are local working dates (GMT+8). Newest first.
 
 ---
 
+## 2026-10-14 — Photo scan to cart with Claude, bundles auto-applied (staging) — `feat(scan)`
+
+New **Scan products** bar above the category pills (`components/ScanProductsBar.tsx`,
+opening `app/modals/photo-scan.tsx`). The cashier takes
+a photo of the packs or uploads one; Claude reads which catalog products are in it
+and how many; the review sheet (`components/PhotoScanResultsSheet.tsx`) lets the
+cashier fix quantities, then adds everything to the sale. Payment is still confirmed
+by hand, as before.
+
+**Decisions.**
+- **Claude Haiku 5.5 through a new `scan-products` edge function**, not an on-device
+  model. The Anthropic key is the function secret `POS_ANTHROPIC_API_KEY` and never
+  ships in the app bundle. Haiku was chosen for speed and cost (~4 to 7 s per scan on
+  staging, including cold start); the cashier review screen catches misreads.
+- **The catalog is read server-side** (active `pos_products`), and structured output
+  limits Claude's answer to an enum of those SKUs. The client sends only the image, so
+  no client text reaches the prompt and Claude cannot invent a product.
+- **Matching is by SKU** (`products.sku`), not by name, so it fits the flat SKU
+  catalog. Unknown SKUs and unpriced products are dropped and counted in a note.
+- **The cashier sets how many of each bundle; the cheapest saving mix is preselected.**
+  Customers can take several bundles at once (Buy Any 4 twice, or Buy Any 4 plus
+  Buy Any 2), so each active "pick any N" bundle gets a stepper in the review sheet.
+  `utils/photo-scan/apply-bundles.ts` fills the chosen counts with the most expensive
+  eligible packs (`planBundles`), and + is disabled once the packs cannot fill another.
+  `suggestBundleCounts` starts the sheet on the cheapest mix that beats paying for every
+  pack as a single (ties prefer fewer bundles); if a quantity edit leaves the chosen
+  counts unfillable, the sheet drops back to that suggestion. A running line shows
+  "Bundles save ₱X" or "cost ₱X more".
+  This replaced, the same day, first an auto-apply on/off switch and then a pick-one
+  list. On staging the misconfigured "QA Buy Any 2" (pick 3 at ₱350) always undercut
+  "Buy Any 4", so the auto-picked bundle was never the one cashiers expected; neither
+  earlier version let a customer take more than one kind of bundle.
+- **A bundle the packs cannot fill stays in the list, greyed out with the reason**
+  ("Needs 4 eligible packs, 3 left"). A deal that silently does not appear reads as a
+  bug; the count shows whether a pack is missing or not eligible.
+- **The old YOLO scanner is kept, untouched and still hidden** (`app/modals/scan.tsx`,
+  `utils/scan-to-cart/`). The new feature lives beside it in `utils/photo-scan/`.
+- Photos are resized to 1500px JPEG before upload (`expo-image-manipulator`, new
+  dependency). Works on web and native; no "mobile web only" restriction.
+- **Take photo opens a live viewfinder** (`expo-camera` `CameraView`, already a
+  dependency) instead of `ImagePicker.launchCameraAsync`. On desktop browsers the
+  picker ignores the camera hint and just opens the file dialog, so both buttons
+  ended up as upload. Upload still uses `expo-image-picker`.
+- **Scan sits in a full-width bar above the category pills, not in the header menu.**
+  On phones the header collapses into a menu, which hid the feature. Four placements
+  were mocked up (header button, scan bar, cart-bar button, floating button); the bar
+  won "for now" because it is the most visible and its subtitle teaches the feature
+  while it is new. It costs about 70px of grid height. The likely later move is the
+  cart-bar button: Scan as the main action while the sale is empty.
+- Cart writes go through `useDemoGuard`, so the tutorial tour cannot add a scan.
+
+**Staging only.** `scan-products` is deployed to Staging (v2: v1 used `minimum` on an
+integer, which structured outputs reject). Not deployed to prod. Note: the staging
+bundle "QA Buy Any 2" has `pick_count: 3`; fix it in Coop before testing the 2-pick path.
+
+**Known limit.** When Claude cannot identify a pack it leaves it out rather than
+guess, so that pack is missing from the list rather than flagged. The cashier sees the
+photo on the review screen and adds it manually.
+
+---
+
 ## 2026-10-13 — Motion polish: shared Sheet, motion tokens, reduced motion — `feat(motion)`
 
 A motion audit of POS + Coop (`design-motion-principles` skill, Emil primary /
