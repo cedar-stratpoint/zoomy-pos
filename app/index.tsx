@@ -19,6 +19,7 @@ import { ConfirmPaymentModal } from '../components/ConfirmPaymentModal';
 import { SyncStatusBar } from '../components/SyncStatusBar';
 import { EventBadge } from '../components/EventBadge';
 import { HeaderMenuDrawer, type HeaderMenuItem } from '../components/HeaderMenuDrawer';
+import { ScanProductsBar } from '../components/ScanProductsBar';
 import { FreeTasteQuickSheet } from '../components/FreeTasteQuickSheet';
 import { useToast } from '../components/Toast';
 import { useDemoGuard } from '../components/tour/useDemoGuard';
@@ -546,6 +547,7 @@ export default function POSScreen() {
   const productPane = (
     <View style={styles.productPane}>
       <View style={styles.filters}>
+        <ScanProductsBar onPress={() => router.push('/modals/photo-scan')} />
         <TourTarget id="pills">
         <CategoryTabs
           categories={categoryNames}
