@@ -50,6 +50,7 @@ function ThemedStack() {
         <Stack.Screen name="modals/prize-select" options={{ presentation: 'modal', title: 'Choose Prize' }} />
         <Stack.Screen name="modals/playbook" options={{ presentation: 'modal', title: 'Playbook' }} />
         <Stack.Screen name="modals/scan"  options={{ presentation: 'modal', headerShown: false }} />
+        <Stack.Screen name="modals/photo-scan" options={{ presentation: 'modal', headerShown: false }} />
       </Stack>
     </>
   );
