@@ -167,6 +167,17 @@ describe('PhotoScanResultsSheet', () => {
     expect(getByText('No products found')).toBeTruthy();
   });
 
+  it('opens the whole photo and closes it again', () => {
+    const { getByTestId, queryByTestId } = render(<PhotoScanResultsSheet {...baseProps} />);
+
+    expect(queryByTestId('photo-viewer-image')).toBeNull();
+    fireEvent.press(getByTestId('photo-preview'));
+    expect(getByTestId('photo-viewer-image').props.resizeMode).toBe('contain');
+
+    fireEvent.press(getByTestId('photo-viewer-close'));
+    expect(queryByTestId('photo-viewer-image')).toBeNull();
+  });
+
   it('uses no em or en dashes in its copy', () => {
     const { toJSON } = render(<PhotoScanResultsSheet {...baseProps} unmatchedCount={1} />);
 
