@@ -1,4 +1,4 @@
-import { planBundles, suggestBundleCounts } from '../../../utils/photo-scan/apply-bundles';
+import { planBundles, usableBundles } from '../../../utils/photo-scan/apply-bundles';
 import { pickBundle, product } from '../../../__fixtures__/photo-scan';
 
 const buyAny4 = pickBundle({ id: 10, name: 'Buy Any 4', price: 650, pick_count: 4 });
@@ -6,37 +6,13 @@ const buyAny2 = pickBundle({ id: 11, name: 'Buy Any 2', price: 350, pick_count: 
 
 const salmon = product({ id: 1, name: 'Salmon', price: 200 });
 const beef = product({ id: 2, name: 'Beef', price: 200, category: 'Meaty Treats' });
-const jerky = product({ id: 3, name: 'Duck Jerky', price: 200, category: 'Tasty Treats' });
 const duo = product({ id: 4, name: 'Duo Duck Pear', price: 200, category: 'Super Duo Bites' });
 
-describe('suggestBundleCounts', () => {
-  it('suggests one Buy Any 4 for 4 eligible packs', () => {
-    expect(suggestBundleCounts([{ product: salmon, quantity: 4 }], [buyAny4, buyAny2])).toEqual({ 10: 1 });
-  });
-
-  it('suggests the cheapest mix of different bundles', () => {
-    const items = [{ product: salmon, quantity: 3 }, { product: beef, quantity: 2 }, { product: jerky, quantity: 1 }];
-    expect(suggestBundleCounts(items, [buyAny4, buyAny2])).toEqual({ 10: 1, 11: 1 });
-  });
-
-  it('suggests the same bundle twice when that is cheapest', () => {
-    expect(suggestBundleCounts([{ product: salmon, quantity: 8 }], [buyAny4])).toEqual({ 10: 2 });
-  });
-
-  it('suggests no bundles when none beats the singles', () => {
-    const cheap = product({ id: 5, name: 'Cheap', price: 100 });
-    expect(suggestBundleCounts([{ product: cheap, quantity: 4 }], [buyAny4])).toEqual({});
-  });
-
-  it('prefers fewer bundles when totals tie', () => {
-    const buyAny4At700 = pickBundle({ id: 13, name: 'Buy Any 4', price: 700, pick_count: 4 });
-    expect(suggestBundleCounts([{ product: salmon, quantity: 4 }], [buyAny4At700, buyAny2])).toEqual({ 13: 1 });
-  });
-
-  it('ignores bundles with no pick count or no lines', () => {
+describe('usableBundles', () => {
+  it('drops bundles with no pick count or no lines', () => {
     const broken = pickBundle({ id: 14, name: 'Broken', price: 1, pick_count: null as unknown as number });
     const noLines = pickBundle({ id: 15, name: 'No lines', price: 1, pick_count: 1, line_categories: [] });
-    expect(suggestBundleCounts([{ product: salmon, quantity: 2 }], [broken, noLines])).toEqual({});
+    expect(usableBundles([buyAny4, broken, noLines])).toEqual([buyAny4]);
   });
 });
 

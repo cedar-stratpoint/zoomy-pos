@@ -31,10 +31,18 @@ describe('PhotoScanResultsSheet', () => {
     expect(getAllByTestId('qty-value').map((n) => n.props.children)).toEqual([2, 2]);
   });
 
-  it('applies the cheapest saving bundles by default and confirms them', () => {
+  it('lists the bundles the packs can fill without preselecting any', () => {
+    const { getByText, getByTestId, queryByTestId } = render(<PhotoScanResultsSheet {...baseProps} />);
+
+    expect(getByText('Buy Any 4')).toBeTruthy();
+    expect(getByTestId('bundle-10-count').props.children).toBe(0);
+    expect(queryByTestId('bundle-savings')).toBeNull();
+  });
+
+  it('applies a bundle the cashier picks and confirms it', () => {
     const { getByText, getByTestId } = render(<PhotoScanResultsSheet {...baseProps} />);
 
-    expect(getByTestId('bundle-10-count').props.children).toBe(1);
+    fireEvent.press(getByTestId('bundle-10-increment'));
     expect(getByText('Bundles save ₱150.00')).toBeTruthy();
     fireEvent.press(getByText('Add to sale'));
 
@@ -52,9 +60,9 @@ describe('PhotoScanResultsSheet', () => {
     };
     const { getByTestId, getByText } = render(<PhotoScanResultsSheet {...props} />);
 
-    // Suggested: Buy Any 4 x2 + Buy Any 2. The customer wants Buy Any 4 + Buy Any 2 x3.
-    expect(getByTestId('bundle-10-count').props.children).toBe(2);
-    fireEvent.press(getByTestId('bundle-10-decrement'));
+    // The customer wants Buy Any 4 + Buy Any 2 x3.
+    fireEvent.press(getByTestId('bundle-10-increment'));
+    fireEvent.press(getByTestId('bundle-11-increment'));
     fireEvent.press(getByTestId('bundle-11-increment'));
     fireEvent.press(getByTestId('bundle-11-increment'));
     expect(getByTestId('bundle-10-count').props.children).toBe(1);
@@ -69,14 +77,13 @@ describe('PhotoScanResultsSheet', () => {
   it('stops adding a bundle once the packs run out', () => {
     const { getByTestId } = render(<PhotoScanResultsSheet {...baseProps} />);
 
+    fireEvent.press(getByTestId('bundle-10-increment'));
     expect(getByTestId('bundle-10-increment').props.accessibilityState).toMatchObject({ disabled: true });
   });
 
-  it('sends everything as singles when every bundle is set to 0', () => {
-    const { getByText, getByTestId, queryByTestId } = render(<PhotoScanResultsSheet {...baseProps} />);
+  it('sends everything as singles when no bundle is picked', () => {
+    const { getByText } = render(<PhotoScanResultsSheet {...baseProps} />);
 
-    fireEvent.press(getByTestId('bundle-10-decrement'));
-    expect(queryByTestId('bundle-savings')).toBeNull();
     fireEvent.press(getByText('Add to sale'));
 
     expect(baseProps.onConfirm).toHaveBeenCalledWith({
@@ -85,7 +92,7 @@ describe('PhotoScanResultsSheet', () => {
     });
   });
 
-  it('allows a bundle that costs more than the singles, but does not pick it', () => {
+  it('allows a bundle that costs more than the singles', () => {
     const pricey = pickBundle({ id: 12, name: 'Pricey 4', price: 900, pick_count: 4 });
     const { getByText, getByTestId } = render(<PhotoScanResultsSheet {...baseProps} pickBundles={[pricey]} />);
 
@@ -112,7 +119,7 @@ describe('PhotoScanResultsSheet', () => {
     const buyAny2 = pickBundle({ id: 11, name: 'Buy Any 2', price: 350, pick_count: 2 });
     const { getByTestId } = render(<PhotoScanResultsSheet {...baseProps} pickBundles={[buyAny4, buyAny2]} />);
 
-    expect(getByTestId('bundle-10-count').props.children).toBe(1);
+    fireEvent.press(getByTestId('bundle-10-increment'));
     expect(getByTestId('bundle-11-increment').props.accessibilityState).toMatchObject({ disabled: true });
   });
 
@@ -124,9 +131,10 @@ describe('PhotoScanResultsSheet', () => {
     expect(queryByText('Bundles')).toBeNull();
   });
 
-  it('drops back to the suggestion when an edit leaves a chosen bundle unfillable', () => {
-    const { getAllByTestId, getByText, queryByTestId } = render(<PhotoScanResultsSheet {...baseProps} />);
+  it('drops back to singles when an edit leaves a chosen bundle unfillable', () => {
+    const { getAllByTestId, getByTestId, getByText, queryByTestId } = render(<PhotoScanResultsSheet {...baseProps} />);
 
+    fireEvent.press(getByTestId('bundle-10-increment'));
     fireEvent.press(getAllByTestId('qty-decrement')[0]);
     expect(queryByTestId('bundle-10')).toBeNull();
 

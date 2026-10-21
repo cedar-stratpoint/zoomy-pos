@@ -12,7 +12,7 @@ import type { MatchedItem, UnsurePack } from '../utils/photo-scan/match-scan';
 import { UnsurePackCard } from './UnsurePackCard';
 import { ProductPicker } from './ProductPicker';
 import {
-  planBundles, suggestBundleCounts, usableBundles,
+  planBundles, usableBundles,
   type BundleCounts, type BundlePlan, type PlannedBundle,
 } from '../utils/photo-scan/apply-bundles';
 
@@ -55,8 +55,8 @@ export function PhotoScanResultsSheet({
   // Products added by answering an unsure pack that the scan had not listed.
   const [addedProducts, setAddedProducts] = useState<Product[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
-  // null until the cashier changes a bundle count: the cheapest saving mix is used.
-  const [counts, setCounts] = useState<BundleCounts | null>(null);
+  // Nothing is preselected: the cashier picks the bundles the customer asks for.
+  const [counts, setCounts] = useState<BundleCounts>({});
   const [photoOpen, setPhotoOpen] = useState(false);
 
   const rows = [...initialItems.map((i) => i.product), ...addedProducts];
@@ -67,12 +67,11 @@ export function PhotoScanResultsSheet({
   // Only bundles these packs could fill on their own, so the list matches the basket.
   // Judged per bundle, not against the current mix, so rows never jump while tapping.
   const bundles = usableBundles(pickBundles).filter((b) => planBundles(items, pickBundles, { [b.id]: 1 }) !== null);
-  const suggested = suggestBundleCounts(items, bundles);
-  // Counts the edited basket can no longer fill fall back to the suggestion.
-  const chosenPlan = counts ? planBundles(items, bundles, counts) : null;
-  const activeCounts = chosenPlan && counts ? counts : suggested;
-  // The suggestion was built from these packs, so it always fills.
-  const plan = chosenPlan ?? (planBundles(items, bundles, suggested) as BundlePlan);
+  // Counts the edited basket can no longer fill fall back to all singles.
+  const chosenPlan = planBundles(items, bundles, counts);
+  const activeCounts = chosenPlan ? counts : {};
+  // No bundles always fills.
+  const plan = chosenPlan ?? (planBundles(items, bundles, {}) as BundlePlan);
   const packCount = items.reduce((sum, i) => sum + i.quantity, 0);
   // An unsure pack must be answered first, so it cannot slip into the sale unchecked.
   const canConfirm = packCount > 0 && pending.length === 0;
