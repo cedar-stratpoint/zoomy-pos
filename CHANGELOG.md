@@ -44,9 +44,59 @@ by hand, as before.
   list. On staging the misconfigured "QA Buy Any 2" (pick 3 at ₱350) always undercut
   "Buy Any 4", so the auto-picked bundle was never the one cashiers expected; neither
   earlier version let a customer take more than one kind of bundle.
-- **A bundle the packs cannot fill stays in the list, greyed out with the reason**
-  ("Needs 4 eligible packs, 3 left"). A deal that silently does not appear reads as a
-  bug; the count shows whether a pack is missing or not eligible.
+- **Only bundles the packs can fill are listed** (2026-10-19). Showing every active
+  bundle, with unfillable ones greyed out and a "Needs 4 eligible packs" reason, read
+  as confusing at the counter. A bundle is listed when the scanned packs could fill it
+  on its own, judged per bundle and not against the current mix, so rows do not appear
+  and disappear while the cashier taps; + is still disabled once its packs are used.
+- **Scan products is a floating button that shrinks while the grid scrolls** (2026-10-21,
+  option C of four mocked up; replaces the full-width scan bar, whose component is
+  removed). `components/ScanFab.tsx` sits over the product grid's bottom-right corner,
+  just above the cart bar (and inside the product pane in landscape). At rest it reads
+  "Scan" so cashiers learn it (screen readers hear "Scan products"); once the grid scrolls past 24px the label tucks
+  away and it becomes a round camera button, so it hides less of the tiles; it returns
+  when the grid is back at the top or the category changes. The grid gets 72px of extra
+  bottom padding so the last row scrolls clear of it; tile sizing ignores that padding.
+  The morph is 180ms ease-out (`DURATION.fabMorph`), animating width on the JS thread
+  because it changes layout; with Reduce Motion it switches instantly. Screen readers
+  always hear "Scan products". Chosen over a short "Scan" pill (A), an icon-only button
+  (B) and a button docked on the cart bar (D, which displaced its drag handle).
+- **Unsure packs are asked about, not dropped** (2026-10-20, design A of four mocked up).
+  `scan-products` (v4 on staging) now returns every pack in one of two lists: `items` when
+  Claude is sure, `unsure` when it is not, with its 2 or 3 likeliest SKUs (most likely
+  first), a quantity and the pack's box on a 0 to 1000 grid. The POS cuts the pack out of
+  the scanned photo (`utils/photo-scan/crop.ts`, from the 1500px copy Claude saw, so the
+  box lines up) and shows `components/UnsurePackCard.tsx` at the top of the review: "1 pack
+  needs a check", the crop, the guesses (likeliest outlined), "Something else" (a searchable
+  list of every sellable product, `components/ProductPicker.tsx`) and "Not a pack, skip".
+  **Add to sale stays disabled until every unsure pack is answered**, so a pack cannot slip
+  into the sale unchecked; the answer joins that product's line. Picked over a best guess
+  the cashier could accept by accident (B), markers on the photo that depend on precise
+  boxes (C) and a separate question step (D). A new amber "needs attention" token
+  (`amber`, `amberDim`, `amberSubtle`) was added to both themes for it. Tested on staging:
+  a blurred Super Duo Bites pack came back unsure with all three Super Duo flavors, the
+  right one first, and an accurate box; a sharp Beef Liver pack came back sure.
+- **Scanning shows a progress bar and what it is doing** (2026-10-19,
+  `components/ScanProgress.tsx`). Three real steps replace the bare spinner: preparing
+  the photo, reading the packs (the Claude call), then matching products and bundles,
+  each with "Step N of 3", a label and a one-line detail. Claude reports no progress
+  while it reads, so that step eases toward 90% over about 9 seconds and holds: the bar
+  never claims to be finished before the answer arrives. Only `transform` animates;
+  with Reduce Motion on, the bar jumps between steps instead of easing.
+- **The whole scanned photo can be opened** (2026-10-19). The review sheet's preview is
+  cropped to a 180px strip, so a "View photo" tag opens it full screen, uncropped, to
+  check the scan against every pack in the shot.
+- **Reference photos (2026-10-16).** `scan-products` (v3 on staging) sends a front-of-pack
+  photo for each product that has one, from the private Storage bucket
+  `product-references` (`<SKU>.jpg`, 400px JPEG at 80%, about 25 KB each; 17 of 29 active
+  products so far). They come first in the prompt, sorted by SKU, followed by the
+  instructions and catalog and a 1-hour `cache_control` marker; the customer's photo comes
+  last. Measured on the 5-pack test photo: the first scan writes 6,570 tokens to the
+  cache, later scans read them (about 1,960 uncached input tokens each), and both runs
+  found all 5 packs, including the unlabeled Cat Grass pack an earlier version missed once.
+  The 1-hour cache was chosen over the 5-minute default because bazaar scans can be
+  minutes apart. If the photos cannot be loaded, the scan carries on by name.
+  Each scan logs its token usage (`scan-products: usage`) so cost can be tracked.
 - **The old YOLO scanner is kept, untouched and still hidden** (`app/modals/scan.tsx`,
   `utils/scan-to-cart/`). The new feature lives beside it in `utils/photo-scan/`.
 - Photos are resized to 1500px JPEG before upload (`expo-image-manipulator`, new
