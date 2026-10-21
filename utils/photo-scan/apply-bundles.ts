@@ -20,19 +20,6 @@ type Candidate = { fills: Fill[]; singles: Product[]; total: number };
 export type BundleCounts = Record<number, number>;
 
 /**
- * The cheapest mix of active "pick any N" bundles for the basket, as counts, or
- * no bundles when none beats paying for every pack as a single. Every count
- * combination is tried (baskets and bundle lists are tiny); ties prefer fewer bundles.
- */
-export function suggestBundleCounts(items: MatchedItem[], bundles: SavedBundle[]): BundleCounts {
-  const units = expandUnits(items);
-  const best = bestCandidate(usableBundles(bundles), units, sumPrices(units));
-  const counts: BundleCounts = {};
-  for (const { bundle } of best.fills) counts[bundle.id] = (counts[bundle.id] ?? 0) + 1;
-  return counts;
-}
-
-/**
  * Fills the requested bundle counts from the basket, each bundle taking its most
  * expensive eligible packs; the rest stay singles. Null when the packs cannot
  * fill every requested bundle. Savings are negative when the bundles cost more.
@@ -47,16 +34,6 @@ export function planBundles(items: MatchedItem[], bundles: SavedBundle[], counts
 /** Bundles that can be used at all: a pick count and at least one product line. */
 export function usableBundles(bundles: SavedBundle[]): SavedBundle[] {
   return bundles.filter((b) => (b.pick_count ?? 0) > 0 && (b.line_categories?.length ?? 0) > 0);
-}
-
-/** The cheapest count combination, or all singles when no bundle beats them. */
-function bestCandidate(usable: SavedBundle[], units: Product[], singlesTotal: number): Candidate {
-  let best: Candidate = { fills: [], singles: units, total: singlesTotal };
-  for (const counts of countCombinations(usable, units.length)) {
-    const candidate = fillBundles(usable, counts, units);
-    if (candidate && isBetter(candidate, best)) best = candidate;
-  }
-  return best;
 }
 
 function toPlan(candidate: Candidate, singlesTotal: number): BundlePlan {
@@ -76,23 +53,6 @@ function expandUnits(items: MatchedItem[]): Product[] {
 
 function sumPrices(units: Product[]): number {
   return units.reduce((sum, p) => sum + (p.price ?? 0), 0);
-}
-
-/** Every vector of per-bundle counts whose total pack demand fits the basket. */
-function countCombinations(bundles: SavedBundle[], unitCount: number): number[][] {
-  const combos: number[][] = [];
-  const walk = (index: number, remaining: number, counts: number[]) => {
-    if (index === bundles.length) {
-      if (counts.some((c) => c > 0)) combos.push(counts);
-      return;
-    }
-    const pick = bundles[index].pick_count as number;
-    for (let n = 0; n * pick <= remaining; n++) {
-      walk(index + 1, remaining - n * pick, [...counts, n]);
-    }
-  };
-  walk(0, unitCount, []);
-  return combos;
 }
 
 /**
@@ -126,11 +86,6 @@ function fillBundles(bundles: SavedBundle[], counts: number[], units: Product[])
 
 function eligibleCount(bundle: SavedBundle, units: Product[]): number {
   return eligibleFlavors(units, bundle.line_categories ?? []).length;
-}
-
-function isBetter(candidate: Candidate, best: Candidate): boolean {
-  if (candidate.total !== best.total) return candidate.total < best.total;
-  return candidate.fills.length < best.fills.length;
 }
 
 /** Same shape as `selectionToBundleItems`: one entry per product with its count. */

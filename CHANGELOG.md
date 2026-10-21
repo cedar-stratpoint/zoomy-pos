@@ -12,6 +12,20 @@ Dates are local working dates (GMT+8). Newest first.
 
 ---
 
+## 2026-10-21 — Photo scan: bundles are no longer preselected — `feat(scan)`
+
+The review sheet still lists every bundle the scanned packs could fill, but every
+count now starts at 0. The cashier taps + on the bundles the customer asks for.
+
+**Decision.** The auto-picked "cheapest saving mix" was often not what the customer
+wanted, so cashiers spent taps undoing it. Starting from nothing makes the sheet show
+what is available and leaves the choice to the cashier. If a quantity edit leaves the
+chosen counts unfillable, the sheet now drops back to all singles (there is no
+suggestion to fall back to). `suggestBundleCounts` and its search helpers were removed
+from `utils/photo-scan/apply-bundles.ts` as they had no other callers.
+
+---
+
 ## 2026-10-14 — Photo scan to cart with Claude, bundles auto-applied (staging) — `feat(scan)`
 
 New **Scan products** bar above the category pills (`components/ScanProductsBar.tsx`,
