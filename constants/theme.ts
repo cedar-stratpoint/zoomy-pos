@@ -13,6 +13,7 @@ export type Palette = Record<
   | 'pink' | 'pinkDim' | 'pinkSubtle'
   | 'red' | 'redSubtle' | 'redDim'
   | 'green' | 'greenDim' | 'greenSubtle'
+  | 'amber' | 'amberDim' | 'amberSubtle'
   | 'textPrimary' | 'textSecondary' | 'textMuted',
   string
 >;
@@ -44,6 +45,11 @@ const dark: Palette = {
   // Red — destructive / clear / cancel
   redDim:      '#7a2333',
 
+  // Amber — needs the cashier's attention (a scanned pack to check)
+  amber:       '#f2a93b',
+  amberDim:    '#6b4a12',
+  amberSubtle: '#2a1f0d',
+
   // Text
   textPrimary:   '#ede9e3',
   textSecondary: '#9e9690',
@@ -73,6 +79,10 @@ const light: Palette = {
   greenSubtle: '#e6f5ec',
 
   redDim:      '#e0a3ac',
+
+  amber:       '#9a5b00',
+  amberDim:    '#e8bf7a',
+  amberSubtle: '#fdf1dc',
 
   textPrimary:   '#1f1b17',
   textSecondary: '#6a625a',

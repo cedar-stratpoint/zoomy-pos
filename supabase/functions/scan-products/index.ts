@@ -8,7 +8,11 @@
 // Reference photos: a private Storage bucket holds one front-of-pack JPEG per product,
 // named <SKU>.jpg. They go first in the prompt, before a 1-hour cache marker, so
 // repeat scans read them from Anthropic's cache; products without one match by name.
-// Always answers JSON: {ok: true, items: [{sku, quantity}]} or {ok: false, error}.
+// Packs Claude cannot pin down come back in `unsure` with its likeliest SKUs and the
+// pack's box (corners on a 0 to 1000 grid over the photo), so the POS can ask the
+// cashier instead of the pack silently going missing.
+// Always answers JSON: {ok: true, items: [{sku, quantity}], unsure: [{candidates, quantity,
+// box: {x0, y0, x1, y1}}]} or {ok: false, error}.
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Anthropic from 'npm:@anthropic-ai/sdk@0.115.0';
 import {encodeBase64} from 'jsr:@std/encoding@1/base64';
@@ -48,16 +52,36 @@ Rules:
 - Compare each pack with the reference photos above: they show the front of each catalog pack. Products without a reference photo are matched by their printed name.
 - Read the pack labels: flavors look alike, so match on the printed name and protein, not just colour.
 - Leave out anything that is not a pack from the catalog (hands, table, signs, other brands).
-- If you cannot tell which catalog product a pack is, leave it out rather than guess.
-- If no catalog packs are visible, return an empty list.
+- Put every visible catalog pack in exactly one list: items when you are sure which product it is, unsure when you are not.
+- For an unsure pack, give your 2 or 3 most likely SKUs in candidates (most likely first), how many packs like it there are, and its box: x0,y0 is its top-left corner and x1,y1 its bottom-right, on a 0 to 1000 grid over the customer's photo width and height.
+- If no catalog packs are visible, return empty lists.
 
 Catalog:
 `;
 
 function itemsSchema(skus: string[]) {
+  const corner = {type: 'integer'};
   return {
     type: 'object',
     properties: {
+      unsure: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            candidates: {type: 'array', items: {type: 'string', enum: skus}},
+            quantity: {type: 'integer'},
+            box: {
+              type: 'object',
+              properties: {x0: corner, y0: corner, x1: corner, y1: corner},
+              required: ['x0', 'y0', 'x1', 'y1'],
+              additionalProperties: false,
+            },
+          },
+          required: ['candidates', 'quantity', 'box'],
+          additionalProperties: false,
+        },
+      },
       items: {
         type: 'array',
         items: {
@@ -72,7 +96,7 @@ function itemsSchema(skus: string[]) {
         },
       },
     },
-    required: ['items'],
+    required: ['items', 'unsure'],
     additionalProperties: false,
   };
 }
@@ -189,8 +213,8 @@ Deno.serve(async (req) => {
     const text = response.content.find((b) => b.type === 'text');
     if (!text || text.type !== 'text') return json({ok: false, error: 'could not read photo'});
 
-    const {items} = JSON.parse(text.text);
-    return json({ok: true, items});
+    const {items, unsure} = JSON.parse(text.text);
+    return json({ok: true, items, unsure: unsure ?? []});
   } catch (err) {
     if (err instanceof Anthropic.RateLimitError) {
       console.warn('scan-products: rate limited');

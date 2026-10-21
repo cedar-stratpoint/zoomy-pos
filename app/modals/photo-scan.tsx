@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
-import { getActiveProducts } from '../../db/products';
+import { getActiveProducts, type Product } from '../../db/products';
 import { getActivePickBundles, SavedBundle } from '../../db/saved-bundles';
 import { useCart } from '../../context/CartContext';
 import { useToast } from '../../components/Toast';
@@ -16,13 +16,32 @@ import { ScanProgress, type ScanStage } from '../../components/ScanProgress';
 import { F, R, type Palette } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { PRESS_OPACITY_PRIMARY } from '../../constants/motion';
-import { resizeForScan } from '../../utils/photo-scan/prepare-photo';
+import { cropPack, resizeForScan, type ScanPhoto } from '../../utils/photo-scan/prepare-photo';
 import { scanProducts, ScanError } from '../../utils/photo-scan/scan-products';
-import { matchScanItems, type MatchResult } from '../../utils/photo-scan/match-scan';
+import { matchScanItems, matchUnsure, type MatchResult, type UnsurePack } from '../../utils/photo-scan/match-scan';
 
 type Phase = 'choose' | 'camera' | 'scanning' | 'results';
 type Photo = { uri: string; width: number; height: number };
-type ScanOutcome = { match: MatchResult; pickBundles: SavedBundle[] };
+type ScanOutcome = {
+  match: MatchResult;
+  unsure: UnsurePack[];
+  /** Every sellable product, for picking an unsure pack by hand. */
+  catalog: Product[];
+  pickBundles: SavedBundle[];
+};
+
+/** Cuts each unsure pack out of the photo; a pack whose crop fails shows the whole photo. */
+function withCrops(packs: UnsurePack[], photo: ScanPhoto): Promise<UnsurePack[]> {
+  return Promise.all(packs.map(async (pack) => {
+    if (!pack.box) return pack;
+    try {
+      return { ...pack, cropUri: await cropPack(photo, pack.box) };
+    } catch (err) {
+      console.warn('Pack crop failed:', err);
+      return pack;
+    }
+  }));
+}
 
 const PICKER_OPTIONS: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 1 };
 
@@ -76,15 +95,20 @@ export default function PhotoScanModal() {
     setStage('preparing');
     setPhase('scanning');
     try {
-      const image = await resizeForScan({ uri: asset.uri, width: asset.width, height: asset.height });
+      const prepared = await resizeForScan({ uri: asset.uri, width: asset.width, height: asset.height });
       setStage('reading');
-      const [items, products, pickBundles] = await Promise.all([
-        scanProducts(image),
+      const [scan, products, pickBundles] = await Promise.all([
+        scanProducts(prepared.base64),
         getActiveProducts(),
         getActivePickBundles(),
       ]);
       setStage('matching');
-      setOutcome({ match: matchScanItems(items, products), pickBundles });
+      setOutcome({
+        match: matchScanItems(scan.items, products),
+        unsure: await withCrops(matchUnsure(scan.unsure, products), prepared),
+        catalog: products.filter((p) => p.price != null),
+        pickBundles,
+      });
       setPhase('results');
     } catch (err) {
       console.warn('Photo scan failed:', err);
@@ -122,6 +146,8 @@ export default function PhotoScanModal() {
           photoUri={photoUri}
           initialItems={outcome.match.matched}
           unmatchedCount={outcome.match.unmatchedCount}
+          unsurePacks={outcome.unsure}
+          catalog={outcome.catalog}
           pickBundles={outcome.pickBundles}
           onConfirm={handleConfirm}
           onScanAgain={scanAgain}
