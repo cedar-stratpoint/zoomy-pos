@@ -1,4 +1,4 @@
-import { eligibleLeft, planBundles, suggestBundleCounts } from '../../../utils/photo-scan/apply-bundles';
+import { planBundles, suggestBundleCounts } from '../../../utils/photo-scan/apply-bundles';
 import { pickBundle, product } from '../../../__fixtures__/photo-scan';
 
 const buyAny4 = pickBundle({ id: 10, name: 'Buy Any 4', price: 650, pick_count: 4 });
@@ -111,17 +111,5 @@ describe('planBundles', () => {
       { id: 1, name: 'Salmon', quantity: 2 },
       { id: 2, name: 'Beef', quantity: 2 },
     ]);
-  });
-});
-
-describe('eligibleLeft', () => {
-  it('counts the singles that could go into one more of the bundle', () => {
-    const plan = planBundles(
-      [{ product: salmon, quantity: 6 }, { product: duo, quantity: 2 }],
-      [buyAny4],
-      { 10: 1 },
-    )!;
-
-    expect(eligibleLeft(plan, buyAny4)).toBe(2);
   });
 });

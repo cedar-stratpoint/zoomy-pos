@@ -44,14 +44,6 @@ export function planBundles(items: MatchedItem[], bundles: SavedBundle[], counts
   return candidate ? toPlan(candidate, sumPrices(units)) : null;
 }
 
-/** Packs still left as singles that could go into one more of this bundle. */
-export function eligibleLeft(plan: BundlePlan, bundle: SavedBundle): number {
-  const eligibleIds = new Set(
-    eligibleFlavors(plan.singles.map((s) => s.product), bundle.line_categories ?? []).map((p) => p.id),
-  );
-  return plan.singles.reduce((sum, s) => sum + (eligibleIds.has(s.product.id) ? s.quantity : 0), 0);
-}
-
 /** Bundles that can be used at all: a pick count and at least one product line. */
 export function usableBundles(bundles: SavedBundle[]): SavedBundle[] {
   return bundles.filter((b) => (b.pick_count ?? 0) > 0 && (b.line_categories?.length ?? 0) > 0);

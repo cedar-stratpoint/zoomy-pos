@@ -9,7 +9,7 @@ import { PRESS_OPACITY_PRIMARY } from '../constants/motion';
 import type { SavedBundle } from '../db/saved-bundles';
 import type { MatchedItem } from '../utils/photo-scan/match-scan';
 import {
-  eligibleLeft, planBundles, suggestBundleCounts, usableBundles,
+  planBundles, suggestBundleCounts, usableBundles,
   type BundleCounts, type BundlePlan, type PlannedBundle,
 } from '../utils/photo-scan/apply-bundles';
 
@@ -50,7 +50,9 @@ export function PhotoScanResultsSheet({
     .map(({ product }) => ({ product, quantity: quantities[product.id] ?? 0 }))
     .filter((i) => i.quantity > 0);
   // Re-planned on every edit: baskets are a handful of packs, so this is cheap.
-  const bundles = usableBundles(pickBundles);
+  // Only bundles these packs could fill on their own, so the list matches the basket.
+  // Judged per bundle, not against the current mix, so rows never jump while tapping.
+  const bundles = usableBundles(pickBundles).filter((b) => planBundles(items, pickBundles, { [b.id]: 1 }) !== null);
   const suggested = suggestBundleCounts(items, bundles);
   // Counts the edited basket can no longer fill fall back to the suggestion.
   const chosenPlan = counts ? planBundles(items, bundles, counts) : null;
@@ -154,7 +156,7 @@ export function PhotoScanResultsSheet({
           })
         )}
 
-        {bundles.length > 0 && items.length > 0 && (
+        {bundles.length > 0 && (
           <View style={styles.bundleBox}>
             <Text style={styles.bundleTitle}>Bundles</Text>
             {bundles.map((bundle) => (
@@ -163,7 +165,6 @@ export function PhotoScanResultsSheet({
                 bundle={bundle}
                 count={countOf(bundle.id)}
                 canAdd={canAdd(bundle.id)}
-                eligibleLeft={eligibleLeft(plan, bundle)}
                 contents={plan.bundles.filter((b) => b.bundle.id === bundle.id)}
                 onChange={(n) => setBundleCount(bundle.id, n)}
                 styles={styles}
@@ -204,8 +205,6 @@ type BundleRowProps = {
   bundle: SavedBundle;
   count: number;
   canAdd: boolean;
-  /** Packs still left as singles that this bundle could take. */
-  eligibleLeft: number;
   /** This bundle's filled copies, so the cashier sees which packs go in. */
   contents: PlannedBundle[];
   onChange: (count: number) => void;
@@ -213,18 +212,12 @@ type BundleRowProps = {
   colors: Palette;
 };
 
-function BundleRow({ bundle, count, canAdd, eligibleLeft, contents, onChange, styles, colors }: BundleRowProps) {
-  const unavailable = count === 0 && !canAdd;
+function BundleRow({ bundle, count, canAdd, contents, onChange, styles, colors }: BundleRowProps) {
   return (
-    <View testID={`bundle-${bundle.id}`} style={[styles.bundleRow, count > 0 && styles.bundleRowSelected, unavailable && styles.bundleRowDisabled]}>
+    <View testID={`bundle-${bundle.id}`} style={[styles.bundleRow, count > 0 && styles.bundleRowSelected]}>
       <View style={styles.rowInfo}>
         <Text style={styles.bundleName}>{bundle.name}</Text>
         <Text style={styles.bundleMuted}>{peso(bundle.price)} for any {bundle.pick_count}</Text>
-        {unavailable && (
-          <Text style={styles.bundleFlavors}>
-            Needs {bundle.pick_count} eligible packs, {eligibleLeft} left
-          </Text>
-        )}
         {contents.map((planned, i) => (
           <Text key={i} style={styles.bundleFlavors}>
             {planned.items.map((it) => `${it.quantity}x ${it.name}`).join(', ')}
@@ -319,7 +312,6 @@ const makeStyles = (c: Palette) => StyleSheet.create({
     borderWidth: 1, borderColor: c.borderDark,
     paddingVertical: 12, paddingHorizontal: 14,
   },
-  bundleRowDisabled: { opacity: 0.55 },
   bundleRowSelected: { borderColor: c.pinkDim, backgroundColor: c.pinkSubtle },
   bundleName: { color: c.textPrimary, fontSize: F.sm, fontWeight: '800' },
   bundleSave: { color: c.pink, fontSize: F.sm, fontWeight: '800' },
