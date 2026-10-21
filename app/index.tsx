@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View, FlatList, Text, TouchableOpacity, StyleSheet, SafeAreaView,
+  type NativeSyntheticEvent, type NativeScrollEvent,
   useWindowDimensions,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -19,7 +20,7 @@ import { ConfirmPaymentModal } from '../components/ConfirmPaymentModal';
 import { SyncStatusBar } from '../components/SyncStatusBar';
 import { EventBadge } from '../components/EventBadge';
 import { HeaderMenuDrawer, type HeaderMenuItem } from '../components/HeaderMenuDrawer';
-import { ScanProductsBar } from '../components/ScanProductsBar';
+import { ScanFab } from '../components/ScanFab';
 import { FreeTasteQuickSheet } from '../components/FreeTasteQuickSheet';
 import { useToast } from '../components/Toast';
 import { useDemoGuard } from '../components/tour/useDemoGuard';
@@ -62,7 +63,13 @@ const PRIZE_CATEGORY = 'Prize';
 // so a row fits the screen (short wide tiles on a phone in landscape) instead of
 // shrinking into unreadable squares.
 const GRID_H_CHROME = 24; // grid horizontal padding (12 * 2)
-const GRID_V_CHROME = 44; // grid vertical padding (12 + 24) plus one row margin (8)
+// Grid vertical padding (12 + 24) plus one row margin (8). The scan button's clearance
+// is left out on purpose: tiles size to the visible area and the clearance scrolls.
+const GRID_V_CHROME = 44;
+// Extra room under the last row so it can scroll clear of the floating scan button.
+const SCAN_FAB_CLEARANCE = 72;
+// How far the grid scrolls before the scan button tucks its label away.
+const SCAN_FAB_COLLAPSE_OFFSET = 24;
 const COL_GAP = 8; // gap between tiles in a row
 const TILE_ASPECT_PHONE = 0.85; // width / height; more compact on phones
 const TILE_ASPECT_TABLET = 0.65; // taller, showcase tiles on larger screens
@@ -79,6 +86,7 @@ export default function POSScreen() {
   // opens the upper drawer. Wider screens keep the inline icon row.
   const compactHeader = width < 520;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [scanFabCollapsed, setScanFabCollapsed] = useState(false);
   // Long-pressing a product tile opens a quick free-taste sheet for that product.
   const [freeTasteProduct, setFreeTasteProduct] = useState<Product | null>(null);
   // Layout follows device rotation: landscape pins a side cart, portrait uses a sheet.
@@ -108,6 +116,8 @@ export default function POSScreen() {
   const [groups, setGroups] = useState<CategoryGroup[]>([]);
   const [pickBundles, setPickBundles] = useState<SavedBundle[]>([]);
   const [sel, setSel] = useState<Selection>({ category: null, subcategory: null });
+  // A new category remounts the grid at the top, which fires no scroll event.
+  useEffect(() => setScanFabCollapsed(false), [sel.category, sel.subcategory]);
 
   const { items, bundles, total, addItem, removeItem, decrementItem, clearCart } = useCart();
   const { showToast } = useToast();
@@ -544,10 +554,18 @@ export default function POSScreen() {
     }
   }
 
+  // Keeps pull-to-refresh's scroll handling and shrinks the scan button once the grid scrolls.
+  const withScanFab = (scroll: { onScroll: (e: NativeSyntheticEvent<NativeScrollEvent>) => void; scrollEventThrottle: number }) => ({
+    ...scroll,
+    onScroll: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      scroll.onScroll(e);
+      setScanFabCollapsed(e.nativeEvent.contentOffset.y > SCAN_FAB_COLLAPSE_OFFSET);
+    },
+  });
+
   const productPane = (
     <View style={styles.productPane}>
       <View style={styles.filters}>
-        <ScanProductsBar onPress={() => router.push('/modals/photo-scan')} />
         <TourTarget id="pills">
         <CategoryTabs
           categories={categoryNames}
@@ -577,7 +595,7 @@ export default function POSScreen() {
       <PullToRefresh onRefresh={handlePullRefresh}>
       {(scroll) => showingPrize ? (
         <FlatList
-          {...scroll}
+          {...withScanFab(scroll)}
           key={`prize-${numColumns}`}
           data={[{ id: 'prize' }]}
           keyExtractor={(i) => i.id}
@@ -595,7 +613,7 @@ export default function POSScreen() {
         />
       ) : showingBundles ? (
         <FlatList
-          {...scroll}
+          {...withScanFab(scroll)}
           key={`bundles-${numColumns}`}
           data={pickBundles}
           keyExtractor={(b) => String(b.id)}
@@ -620,7 +638,7 @@ export default function POSScreen() {
         />
       ) : (
         <FlatList
-          {...scroll}
+          {...withScanFab(scroll)}
           key={numColumns}
           data={visibleProducts}
           keyExtractor={(p) => String(p.id)}
@@ -663,6 +681,7 @@ export default function POSScreen() {
       </PullToRefresh>
       </View>
       </TourTarget>
+      <ScanFab collapsed={scanFabCollapsed} onPress={() => router.push('/modals/photo-scan')} />
     </View>
   );
 
@@ -835,7 +854,7 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   },
   gridArea: { flex: 1 },
   grid_list: { flex: 1 },
-  grid: { padding: 12, paddingBottom: 24 },
+  grid: { padding: 12, paddingBottom: 24 + SCAN_FAB_CLEARANCE },
   gridRow: { gap: 8, marginBottom: 8 },
   tileWrapper: { flex: 1 },
 
