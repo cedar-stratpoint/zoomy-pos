@@ -2,6 +2,7 @@ import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import { PhotoScanResultsSheet } from '../../components/PhotoScanResultsSheet';
 import { pickBundle, product } from '../../__fixtures__/photo-scan';
+import type { UnsurePack } from '../../utils/photo-scan/match-scan';
 
 const salmon = product({ id: 1, name: 'Freeze-Dried Salmon Cubes', price: 200 });
 const beef = product({ id: 2, name: 'Meaty Treats Beef', price: 200, category: 'Meaty Treats' });
@@ -11,6 +12,8 @@ const baseProps = {
   photoUri: 'data:image/jpeg;base64,/9j/',
   initialItems: [{ product: salmon, quantity: 2 }, { product: beef, quantity: 2 }],
   unmatchedCount: 0,
+  unsurePacks: [] as UnsurePack[],
+  catalog: [salmon, beef],
   pickBundles: [buyAny4],
   onConfirm: jest.fn(),
   onScanAgain: jest.fn(),
@@ -176,6 +179,84 @@ describe('PhotoScanResultsSheet', () => {
 
     fireEvent.press(getByTestId('photo-viewer-close'));
     expect(queryByTestId('photo-viewer-image')).toBeNull();
+  });
+
+  describe('unsure packs', () => {
+    const duckPear = product({ id: 20, name: 'Super Duo Bites Duck Pear', price: 300, category: 'Super Duo Bites' });
+    const duckCarrot = product({ id: 21, name: 'Super Duo Bites Duck Carrot', price: 300, category: 'Super Duo Bites' });
+    const unsure: UnsurePack = { id: 0, candidates: [duckPear, duckCarrot], quantity: 1, box: null, cropUri: null };
+    const props = { ...baseProps, unsurePacks: [unsure], catalog: [salmon, beef, duckPear, duckCarrot] };
+
+    it('asks about the pack and blocks adding until it is answered', () => {
+      const { getByText, getByTestId } = render(<PhotoScanResultsSheet {...props} />);
+
+      expect(getByText('1 pack needs a check')).toBeTruthy();
+      expect(getByTestId('footer-count').props.children.join('')).toBe('4 packs, 1 to check');
+      expect(getByTestId('add-to-sale').props.accessibilityState).toMatchObject({ disabled: true });
+    });
+
+    it('adds the picked guess as a line and allows adding to the sale', () => {
+      const { getByTestId, getByText, queryByTestId } = render(<PhotoScanResultsSheet {...props} />);
+
+      fireEvent.press(getByTestId('unsure-option-21'));
+      expect(queryByTestId('unsure-card')).toBeNull();
+      expect(getByText('Super Duo Bites Duck Carrot')).toBeTruthy();
+      fireEvent.press(getByText('Add to sale'));
+
+      const { bundles, singles } = props.onConfirm.mock.calls[0][0];
+      const all = [...singles, ...bundles.flatMap((b: { items: { id: number; quantity: number }[] }) =>
+        b.items.map((i) => ({ product: { id: i.id }, quantity: i.quantity })))];
+      expect(all.filter((l: { product: { id: number } }) => l.product.id === 21)).toHaveLength(1);
+    });
+
+    it('adds to an existing line when the answer was already scanned', () => {
+      const pack = { ...unsure, candidates: [salmon] };
+      const { getByTestId, getAllByTestId } = render(<PhotoScanResultsSheet {...props} unsurePacks={[pack]} />);
+
+      fireEvent.press(getByTestId('unsure-option-1'));
+
+      expect(getAllByTestId('qty-value').map((n) => n.props.children)).toEqual([3, 2]);
+    });
+
+    it('drops the pack when it is not a pack', () => {
+      const { getByTestId, queryByTestId } = render(<PhotoScanResultsSheet {...props} />);
+
+      fireEvent.press(getByTestId('unsure-skip'));
+
+      expect(queryByTestId('unsure-card')).toBeNull();
+      expect(getByTestId('footer-count').props.children.join('')).toBe('4 packs');
+      expect(getByTestId('add-to-sale').props.accessibilityState).toMatchObject({ disabled: false });
+    });
+
+    it('lets the cashier search every product when no guess fits', () => {
+      const { getByTestId, getAllByTestId } = render(<PhotoScanResultsSheet {...props} />);
+
+      fireEvent.press(getByTestId('unsure-something-else'));
+      fireEvent.changeText(getByTestId('product-picker-search'), 'duck pear');
+      fireEvent.press(getByTestId('product-picker-20'));
+
+      // The picker keeps its last rows on screen while it slides away, so count lines instead.
+      expect(getAllByTestId('qty-value').map((n) => n.props.children)).toEqual([2, 2, 1]);
+      expect(getByTestId('add-to-sale').props.accessibilityState).toMatchObject({ disabled: false });
+    });
+
+    it('asks about several unsure packs one at a time', () => {
+      const second = { ...unsure, id: 1 };
+      const { getByText, getByTestId } = render(<PhotoScanResultsSheet {...props} unsurePacks={[unsure, second]} />);
+
+      expect(getByText('2 packs need a check')).toBeTruthy();
+      fireEvent.press(getByTestId('unsure-option-20'));
+      expect(getByText('1 pack needs a check')).toBeTruthy();
+    });
+
+    it('offers only the product list when the scanner had no guess', () => {
+      const { getByText, queryByTestId } = render(
+        <PhotoScanResultsSheet {...props} unsurePacks={[{ ...unsure, candidates: [] }]} />,
+      );
+
+      expect(getByText('Pick the product')).toBeTruthy();
+      expect(queryByTestId('unsure-option-20')).toBeNull();
+    });
   });
 
   it('uses no em or en dashes in its copy', () => {

@@ -6,8 +6,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { PRESS_OPACITY_PRIMARY } from '../constants/motion';
+import type { Product } from '../db/products';
 import type { SavedBundle } from '../db/saved-bundles';
-import type { MatchedItem } from '../utils/photo-scan/match-scan';
+import type { MatchedItem, UnsurePack } from '../utils/photo-scan/match-scan';
+import { UnsurePackCard } from './UnsurePackCard';
+import { ProductPicker } from './ProductPicker';
 import {
   planBundles, suggestBundleCounts, usableBundles,
   type BundleCounts, type BundlePlan, type PlannedBundle,
@@ -19,6 +22,10 @@ type Props = {
   photoUri: string;
   initialItems: MatchedItem[];
   unmatchedCount: number;
+  /** Packs the scanner could not pin down; each must be answered before adding. */
+  unsurePacks: UnsurePack[];
+  /** Every sellable product, for an unsure pack none of the guesses fit. */
+  catalog: Product[];
   pickBundles: SavedBundle[];
   onConfirm: (confirmation: PhotoScanConfirmation) => void;
   onScanAgain: () => void;
@@ -34,7 +41,7 @@ function savingsLabel(savings: number): string {
 }
 
 export function PhotoScanResultsSheet({
-  photoUri, initialItems, unmatchedCount, pickBundles, onConfirm, onScanAgain, onClose,
+  photoUri, initialItems, unmatchedCount, unsurePacks, catalog, pickBundles, onConfirm, onScanAgain, onClose,
 }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -42,13 +49,19 @@ export function PhotoScanResultsSheet({
   const [quantities, setQuantities] = useState<Record<number, number>>(
     () => Object.fromEntries(initialItems.map((i) => [i.product.id, i.quantity])),
   );
-  const [scannedQuantities] = useState(quantities);
+  // Restored by Undo. Answering an unsure pack adds to it, like a scanned pack.
+  const [scannedQuantities, setScannedQuantities] = useState(quantities);
+  const [pending, setPending] = useState(unsurePacks);
+  // Products added by answering an unsure pack that the scan had not listed.
+  const [addedProducts, setAddedProducts] = useState<Product[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
   // null until the cashier changes a bundle count: the cheapest saving mix is used.
   const [counts, setCounts] = useState<BundleCounts | null>(null);
   const [photoOpen, setPhotoOpen] = useState(false);
 
-  const items = initialItems
-    .map(({ product }) => ({ product, quantity: quantities[product.id] ?? 0 }))
+  const rows = [...initialItems.map((i) => i.product), ...addedProducts];
+  const items = rows
+    .map((product) => ({ product, quantity: quantities[product.id] ?? 0 }))
     .filter((i) => i.quantity > 0);
   // Re-planned on every edit: baskets are a handful of packs, so this is cheap.
   // Only bundles these packs could fill on their own, so the list matches the basket.
@@ -61,6 +74,8 @@ export function PhotoScanResultsSheet({
   // The suggestion was built from these packs, so it always fills.
   const plan = chosenPlan ?? (planBundles(items, bundles, suggested) as BundlePlan);
   const packCount = items.reduce((sum, i) => sum + i.quantity, 0);
+  // An unsure pack must be answered first, so it cannot slip into the sale unchecked.
+  const canConfirm = packCount > 0 && pending.length === 0;
 
   function countOf(bundleId: number): number {
     return activeCounts[bundleId] ?? 0;
@@ -78,8 +93,21 @@ export function PhotoScanResultsSheet({
     setQuantities((prev) => ({ ...prev, [productId]: Math.max(0, quantity) }));
   }
 
+  /** Answers the first unsure pack: its packs join that product's line, or are dropped. */
+  function resolveUnsure(product: Product | null) {
+    const [pack, ...rest] = pending;
+    if (!pack) return;
+    setPending(rest);
+    setPickerOpen(false);
+    if (!product) return;
+    const add = (prev: Record<number, number>) => ({ ...prev, [product.id]: (prev[product.id] ?? 0) + pack.quantity });
+    setQuantities(add);
+    setScannedQuantities(add);
+    if (!rows.some((p) => p.id === product.id)) setAddedProducts((prev) => [...prev, product]);
+  }
+
   function handleConfirm() {
-    if (packCount === 0) return;
+    if (!canConfirm) return;
     onConfirm({ bundles: plan.bundles, singles: plan.singles });
   }
 
@@ -93,6 +121,18 @@ export function PhotoScanResultsSheet({
       </View>
 
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+        {pending.length > 0 && (
+          <UnsurePackCard
+            key={pending[0].id}
+            pack={pending[0]}
+            remaining={pending.length}
+            photoUri={photoUri}
+            onPick={resolveUnsure}
+            onSomethingElse={() => setPickerOpen(true)}
+            onSkip={() => resolveUnsure(null)}
+          />
+        )}
+
         <TouchableOpacity
           testID="photo-preview"
           onPress={() => setPhotoOpen(true)}
@@ -118,7 +158,7 @@ export function PhotoScanResultsSheet({
           </View>
         )}
 
-        {initialItems.length === 0 ? (
+        {rows.length === 0 && pending.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>No products found</Text>
             <Text style={styles.emptySubtext}>
@@ -126,7 +166,7 @@ export function PhotoScanResultsSheet({
             </Text>
           </View>
         ) : (
-          initialItems.map(({ product }) => {
+          rows.map((product) => {
             const qty = quantities[product.id] ?? 0;
             const removed = qty === 0;
             return (
@@ -214,21 +254,33 @@ export function PhotoScanResultsSheet({
         </SafeAreaView>
       </Modal>
 
+      <ProductPicker
+        visible={pickerOpen}
+        products={catalog}
+        onPick={resolveUnsure}
+        onClose={() => setPickerOpen(false)}
+      />
+
       <View style={styles.footer}>
         <View style={styles.footerInfo}>
-          <Text style={styles.footerCount}>{packCount} {packCount === 1 ? 'pack' : 'packs'}</Text>
+          <Text testID="footer-count" style={[styles.footerCount, pending.length > 0 && styles.footerCountPending]}>
+            {packCount} {packCount === 1 ? 'pack' : 'packs'}
+            {pending.length > 0 ? `, ${pending.length} to check` : ''}
+          </Text>
           <Text style={styles.footerTotal}>{peso(plan.total)}</Text>
         </View>
         <TouchableOpacity style={styles.scanAgainBtn} onPress={onScanAgain}>
           <Text style={styles.scanAgainText}>Scan again</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.addBtn, packCount === 0 && styles.addBtnDisabled]}
+          testID="add-to-sale"
+          style={[styles.addBtn, !canConfirm && styles.addBtnDisabled]}
           onPress={handleConfirm}
-          disabled={packCount === 0}
+          disabled={!canConfirm}
           activeOpacity={PRESS_OPACITY_PRIMARY}
+          accessibilityState={{ disabled: !canConfirm }}
         >
-          <Text style={[styles.addText, packCount === 0 && styles.addTextDisabled]}>Add to sale</Text>
+          <Text style={[styles.addText, !canConfirm && styles.addTextDisabled]}>Add to sale</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -372,6 +424,7 @@ const makeStyles = (c: Palette) => StyleSheet.create({
     backgroundColor: c.surface,
   },
   footerInfo: { flex: 1 },
+  footerCountPending: { color: c.amber },
   footerCount: { color: c.textMuted, fontSize: F.xs, fontWeight: '700' },
   footerTotal: { color: c.textPrimary, fontSize: F.xl, fontWeight: '800' },
   scanAgainBtn: {
