@@ -23,6 +23,8 @@ export const DURATION = {
   /** Sheets and drawers sliding in. */
   sheetIn: 240,
   sheetOut: 200,
+  /** Scan button growing or shrinking its label as the grid scrolls. Seen often: keep it quick. */
+  fabMorph: 180,
 } as const;
 
 /** `activeOpacity` for TouchableOpacity: the standard press dip. */
