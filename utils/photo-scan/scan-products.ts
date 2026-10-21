@@ -7,9 +7,10 @@ export class ScanError extends Error {}
 /** The edge function's box: corners on a 0 to 1000 grid over the photo. */
 type RawBox = { x0: unknown; y0: unknown; x1: unknown; y1: unknown };
 type RawUnsure = { candidates: string[]; quantity: number; box?: RawBox | null };
-type ScanResponse = { ok: boolean; items?: ScannedItem[]; unsure?: RawUnsure[]; error?: string };
+type ScanResponse = { ok: boolean; items?: ScannedItem[]; unsure?: RawUnsure[]; model?: string; error?: string };
 
-export type ScanResult = { items: ScannedItem[]; unsure: UnsureScan[] };
+/** `model` is the model that read the photo; null from a function deployed before it was sent. */
+export type ScanResult = { items: ScannedItem[]; unsure: UnsureScan[]; model: string | null };
 
 const GRID = 1000;
 
@@ -34,7 +35,7 @@ export async function scanProducts(imageBase64: string): Promise<ScanResult> {
     quantity: u.quantity,
     box: toPackBox(u.box),
   }));
-  return { items: data.items, unsure };
+  return { items: data.items, unsure, model: data.model ?? null };
 }
 
 /** Converts the model's box to photo fractions; null when it is missing or malformed. */

@@ -12,7 +12,8 @@
 // pack's box (corners on a 0 to 1000 grid over the photo), so the POS can ask the
 // cashier instead of the pack silently going missing.
 // Always answers JSON: {ok: true, items: [{sku, quantity}], unsure: [{candidates, quantity,
-// box: {x0, y0, x1, y1}}]} or {ok: false, error}.
+// box: {x0, y0, x1, y1}}], model} or {ok: false, error}. `model` is stored with the
+// POS's training samples, so each sample records which model read it.
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Anthropic from 'npm:@anthropic-ai/sdk@0.115.0';
 import {encodeBase64} from 'jsr:@std/encoding@1/base64';
@@ -214,7 +215,7 @@ Deno.serve(async (req) => {
     if (!text || text.type !== 'text') return json({ok: false, error: 'could not read photo'});
 
     const {items, unsure} = JSON.parse(text.text);
-    return json({ok: true, items, unsure: unsure ?? []});
+    return json({ok: true, items, unsure: unsure ?? [], model: MODEL});
   } catch (err) {
     if (err instanceof Anthropic.RateLimitError) {
       console.warn('scan-products: rate limited');
