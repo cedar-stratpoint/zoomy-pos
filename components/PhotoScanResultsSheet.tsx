@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, Image, StyleSheet, ScrollView,
+  View, Text, TouchableOpacity, Image, StyleSheet, ScrollView, Modal, SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { F, R, type Palette } from '../constants/theme';
@@ -45,6 +45,7 @@ export function PhotoScanResultsSheet({
   const [scannedQuantities] = useState(quantities);
   // null until the cashier changes a bundle count: the cheapest saving mix is used.
   const [counts, setCounts] = useState<BundleCounts | null>(null);
+  const [photoOpen, setPhotoOpen] = useState(false);
 
   const items = initialItems
     .map(({ product }) => ({ product, quantity: quantities[product.id] ?? 0 }))
@@ -92,7 +93,19 @@ export function PhotoScanResultsSheet({
       </View>
 
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-        <Image source={{ uri: photoUri }} style={styles.photo} resizeMode="cover" accessibilityLabel="Scanned photo" />
+        <TouchableOpacity
+          testID="photo-preview"
+          onPress={() => setPhotoOpen(true)}
+          activeOpacity={PRESS_OPACITY_PRIMARY}
+          accessibilityRole="imagebutton"
+          accessibilityLabel="View the whole photo"
+        >
+          <Image source={{ uri: photoUri }} style={styles.photo} resizeMode="cover" />
+          <View style={styles.photoExpand} pointerEvents="none">
+            <Ionicons name="expand-outline" size={14} color="#fff" />
+            <Text style={styles.photoExpandText}>View photo</Text>
+          </View>
+        </TouchableOpacity>
 
         {unmatchedCount > 0 && (
           <View style={styles.note}>
@@ -179,6 +192,27 @@ export function PhotoScanResultsSheet({
           </View>
         )}
       </ScrollView>
+
+      <Modal visible={photoOpen} animationType="fade" onRequestClose={() => setPhotoOpen(false)}>
+        <SafeAreaView style={styles.viewer}>
+          <TouchableOpacity
+            testID="photo-viewer-close"
+            style={styles.viewerClose}
+            onPress={() => setPhotoOpen(false)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Close photo"
+          >
+            <Ionicons name="close" size={26} color="#fff" />
+          </TouchableOpacity>
+          <Image
+            testID="photo-viewer-image"
+            source={{ uri: photoUri }}
+            style={styles.viewerImage}
+            resizeMode="contain"
+            accessibilityLabel="Scanned photo"
+          />
+        </SafeAreaView>
+      </Modal>
 
       <View style={styles.footer}>
         <View style={styles.footerInfo}>
@@ -267,6 +301,20 @@ const makeStyles = (c: Palette) => StyleSheet.create({
     width: '100%', height: 180, borderRadius: R.md,
     backgroundColor: c.elevated, marginBottom: 10,
   },
+  photoExpand: {
+    position: 'absolute', right: 8, bottom: 18,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 999,
+    paddingHorizontal: 10, paddingVertical: 5,
+  },
+  photoExpandText: { color: '#fff', fontSize: F.xs, fontWeight: '700' },
+
+  viewer: { flex: 1, backgroundColor: '#000' },
+  viewerClose: {
+    alignSelf: 'flex-end', margin: 12, padding: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20,
+  },
+  viewerImage: { flex: 1, width: '100%' },
 
   note: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
