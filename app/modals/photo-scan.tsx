@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, Image, StyleSheet, SafeAreaView, ActivityIndicator,
+  View, Text, TouchableOpacity, Image, StyleSheet, SafeAreaView,
 } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -12,6 +12,7 @@ import { useCart } from '../../context/CartContext';
 import { useToast } from '../../components/Toast';
 import { useDemoGuard } from '../../components/tour/useDemoGuard';
 import { PhotoScanResultsSheet, type PhotoScanConfirmation } from '../../components/PhotoScanResultsSheet';
+import { ScanProgress, type ScanStage } from '../../components/ScanProgress';
 import { F, R, type Palette } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { PRESS_OPACITY_PRIMARY } from '../../constants/motion';
@@ -37,6 +38,7 @@ export default function PhotoScanModal() {
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const [capturing, setCapturing] = useState(false);
+  const [stage, setStage] = useState<ScanStage>('preparing');
 
   // A live viewfinder rather than ImagePicker.launchCameraAsync: on desktop browsers that
   // only opens the file picker, since they ignore the file input's capture hint.
@@ -71,14 +73,17 @@ export default function PhotoScanModal() {
 
   async function scanPhoto(asset: Photo) {
     setPhotoUri(asset.uri);
+    setStage('preparing');
     setPhase('scanning');
     try {
       const image = await resizeForScan({ uri: asset.uri, width: asset.width, height: asset.height });
+      setStage('reading');
       const [items, products, pickBundles] = await Promise.all([
         scanProducts(image),
         getActiveProducts(),
         getActivePickBundles(),
       ]);
+      setStage('matching');
       setOutcome({ match: matchScanItems(items, products), pickBundles });
       setPhase('results');
     } catch (err) {
@@ -159,8 +164,7 @@ export default function PhotoScanModal() {
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
           {photoUri && <Image source={{ uri: photoUri }} style={styles.preview} resizeMode="cover" />}
-          <ActivityIndicator size="large" color={colors.pink} />
-          <Text style={styles.scanningText}>Reading products...</Text>
+          <ScanProgress stage={stage} />
         </View>
       </SafeAreaView>
     );
@@ -217,7 +221,6 @@ const makeStyles = (c: Palette) => StyleSheet.create({
     width: '100%', maxWidth: 320, height: 240, borderRadius: R.md,
     backgroundColor: c.elevated, marginBottom: 12,
   },
-  scanningText: { color: c.textSecondary, fontSize: F.sm, fontWeight: '700' },
 
   cameraContainer: { flex: 1, backgroundColor: '#000' },
   camera: { flex: 1 },
