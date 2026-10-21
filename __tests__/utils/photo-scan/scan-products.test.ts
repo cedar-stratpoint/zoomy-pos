@@ -23,7 +23,15 @@ describe('scanProducts', () => {
     const result = await scanProducts('BASE64');
 
     expect(invoke).toHaveBeenCalledWith('scan-products', { body: { image: 'BASE64' } });
-    expect(result).toEqual({ items: [{ sku: 'FD-SAL', quantity: 2 }], unsure: [] });
+    expect(result).toEqual({ items: [{ sku: 'FD-SAL', quantity: 2 }], unsure: [], model: null });
+  });
+
+  it('returns the model that read the photo', async () => {
+    supabaseReturning({ data: { ok: true, items: [], model: 'claude-haiku-5-5' }, error: null });
+
+    const result = await scanProducts('BASE64');
+
+    expect(result.model).toBe('claude-haiku-5-5');
   });
 
   it('returns unsure packs with their box as fractions of the photo', async () => {
