@@ -12,6 +12,41 @@ Dates are local working dates (GMT+8). Newest first.
 
 ---
 
+## 2026-10-21 — Photo scan: confirmed scans kept as training samples (staging) — `feat(scan)`
+
+Every photo scan the cashier confirms with **Add to sale** is now saved: the photo
+the scanner read, what the scanner said, and what the cashier actually added
+(`utils/photo-scan/training-sample.ts`, `save-training-sample.ts`). It is written to
+a local `scan_samples` table first, linked to its sale at checkout, and uploaded by
+the outbox after every Coop write (`utils/scan-samples-sync.ts`). The upload puts the
+photo in the private `pos-scan-samples` bucket and the row in `pos_scan_samples`
+through `record_pos_scan_sample` (`supabase/scan_samples_2026-10-21.sql`, applied
+to Staging). No UI change for the cashier.
+
+**Decisions.**
+- **The 1500px JPEG the scanner read, not the camera original.** It is exactly
+  what the model saw, about 300 to 500 KB, and pack boxes refer to it.
+- **Confirmed scans only.** Each sample carries a human-checked label. Cancelled
+  scans are not kept.
+- **Label = counts per SKU, not boxes.** The scanner only returns boxes for unsure
+  packs, so a detector will need boxes drawn later. `edited` marks samples where
+  the cashier changed anything, including picking other than the top guess for an
+  unsure pack. Shape versioned by `label_version`.
+- **Private, write-only from the POS.** anon can insert a photo at
+  `YYYY-MM/<uuid>.jpg` and call the RPC. It cannot read, replace or delete either.
+  Cashiers are told to frame only the products, since a photo may catch hands.
+- **Never in the way of a sale.** Saving and linking are best-effort. The upload
+  runs after sales, free tastes and prizes, and stays out of the "N pending" count.
+  The local photo is deleted once Coop has the row.
+- **Web keeps the photo in the row.** On web the scanned photo is a blob URL that
+  dies on reload, so the base64 JPEG sent to the scanner is stored in
+  `scan_samples.photo_base64` (the web database persists in OPFS). Native keeps a
+  file in the document dir. Both are cleared once Coop has the sample.
+- `scan-products` now returns `model`, stored with each sample. It needs a
+  redeploy; until then samples record `model: null`.
+
+---
+
 ## 2026-10-21 — Photo scan: bundles are no longer preselected — `feat(scan)`
 
 The review sheet still lists every bundle the scanned packs could fill, but every

@@ -8,7 +8,7 @@ import { useTheme } from '../context/ThemeContext';
 import { PRESS_OPACITY_PRIMARY } from '../constants/motion';
 import type { Product } from '../db/products';
 import type { SavedBundle } from '../db/saved-bundles';
-import type { MatchedItem, UnsurePack } from '../utils/photo-scan/match-scan';
+import type { MatchedItem, UnsureAnswer, UnsurePack } from '../utils/photo-scan/match-scan';
 import { UnsurePackCard } from './UnsurePackCard';
 import { ProductPicker } from './ProductPicker';
 import {
@@ -16,7 +16,12 @@ import {
   type BundleCounts, type BundlePlan, type PlannedBundle,
 } from '../utils/photo-scan/apply-bundles';
 
-export type PhotoScanConfirmation = { bundles: PlannedBundle[]; singles: MatchedItem[] };
+export type PhotoScanConfirmation = {
+  bundles: PlannedBundle[];
+  singles: MatchedItem[];
+  /** One per unsure pack, in the order answered. Kept as training labels. */
+  unsureAnswers: UnsureAnswer[];
+};
 
 type Props = {
   photoUri: string;
@@ -52,6 +57,7 @@ export function PhotoScanResultsSheet({
   // Restored by Undo. Answering an unsure pack adds to it, like a scanned pack.
   const [scannedQuantities, setScannedQuantities] = useState(quantities);
   const [pending, setPending] = useState(unsurePacks);
+  const [answers, setAnswers] = useState<UnsureAnswer[]>([]);
   // Products added by answering an unsure pack that the scan had not listed.
   const [addedProducts, setAddedProducts] = useState<Product[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -93,10 +99,11 @@ export function PhotoScanResultsSheet({
   }
 
   /** Answers the first unsure pack: its packs join that product's line, or are dropped. */
-  function resolveUnsure(product: Product | null) {
+  function resolveUnsure(product: Product | null, via: UnsureAnswer['via']) {
     const [pack, ...rest] = pending;
     if (!pack) return;
     setPending(rest);
+    setAnswers((prev) => [...prev, { packId: pack.id, product, via }]);
     setPickerOpen(false);
     if (!product) return;
     const add = (prev: Record<number, number>) => ({ ...prev, [product.id]: (prev[product.id] ?? 0) + pack.quantity });
@@ -107,7 +114,7 @@ export function PhotoScanResultsSheet({
 
   function handleConfirm() {
     if (!canConfirm) return;
-    onConfirm({ bundles: plan.bundles, singles: plan.singles });
+    onConfirm({ bundles: plan.bundles, singles: plan.singles, unsureAnswers: answers });
   }
 
   return (
@@ -126,9 +133,9 @@ export function PhotoScanResultsSheet({
             pack={pending[0]}
             remaining={pending.length}
             photoUri={photoUri}
-            onPick={resolveUnsure}
+            onPick={(product) => resolveUnsure(product, 'candidate')}
             onSomethingElse={() => setPickerOpen(true)}
-            onSkip={() => resolveUnsure(null)}
+            onSkip={() => resolveUnsure(null, 'skipped')}
           />
         )}
 
@@ -256,7 +263,7 @@ export function PhotoScanResultsSheet({
       <ProductPicker
         visible={pickerOpen}
         products={catalog}
-        onPick={resolveUnsure}
+        onPick={(product) => resolveUnsure(product, 'other')}
         onClose={() => setPickerOpen(false)}
       />
 

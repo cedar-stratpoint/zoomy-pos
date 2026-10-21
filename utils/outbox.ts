@@ -14,6 +14,7 @@ import { drainFreeTastes } from './free-tastes-sync';
 import { getPendingFreeTastes, countPendingFreeTastes } from '../db/free-tastes';
 import { drainOrderPrizes } from './order-prizes-sync';
 import { getPendingOrderPrizes, countPendingOrderPrizes } from '../db/order-prizes';
+import { drainScanSamples } from './scan-samples-sync';
 import { beginSync, endSync, setPendingCount } from './sync-status';
 
 /**
@@ -170,5 +171,8 @@ export async function drainOutbox(): Promise<DrainResult> {
     draining = false;
     endSync();
     await refreshPendingCount();
+    // Photo scan training samples go after every Coop write, in the background and
+    // outside the pending count, so a slow photo upload never holds up a sale.
+    drainScanSamples().catch(() => {});
   }
 }

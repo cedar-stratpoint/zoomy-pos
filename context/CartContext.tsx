@@ -27,6 +27,8 @@ export type CartBundle = {
 type CartState = {
   items: CartItem[];
   bundles: CartBundle[];
+  /** Photo scan training samples added to this sale, linked to it at checkout. */
+  scanSampleIds: string[];
 };
 
 type CartAction =
@@ -39,7 +41,8 @@ type CartAction =
   | { type: 'CLEAR_CART' }
   | { type: 'CLEAR_BUNDLES' }
   | { type: 'ADD_BUNDLE'; bundle: CartBundle }
-  | { type: 'REMOVE_BUNDLE'; cartId: string };
+  | { type: 'REMOVE_BUNDLE'; cartId: string }
+  | { type: 'ADD_SCAN_SAMPLE'; clientUuid: string };
 
 function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
@@ -162,13 +165,15 @@ function cartReducer(state: CartState, action: CartAction): CartState {
         ),
       };
     case 'CLEAR_CART':
-      return { items: [], bundles: [] };
+      return { items: [], bundles: [], scanSampleIds: [] };
     case 'CLEAR_BUNDLES':
       return { ...state, bundles: [] };
     case 'ADD_BUNDLE':
       return { ...state, bundles: [...state.bundles, action.bundle] };
     case 'REMOVE_BUNDLE':
       return { ...state, bundles: state.bundles.filter((b) => b.cartId !== action.cartId) };
+    case 'ADD_SCAN_SAMPLE':
+      return { ...state, scanSampleIds: [...state.scanSampleIds, action.clientUuid] };
     default:
       return state;
   }
@@ -177,6 +182,7 @@ function cartReducer(state: CartState, action: CartAction): CartState {
 type CartContextValue = {
   items: CartItem[];
   bundles: CartBundle[];
+  scanSampleIds: string[];
   total: number;
   addItem: (product: { id: number; name: string; price: number; variantId?: number; variantName?: string }) => void;
   addPrize: (product: { id: number; name: string; price: number; variantId?: number; variantName?: string }) => void;
@@ -188,12 +194,13 @@ type CartContextValue = {
   clearBundles: () => void;
   addBundle: (bundle: Omit<CartBundle, 'cartId'>) => void;
   removeBundle: (cartId: string) => void;
+  addScanSample: (clientUuid: string) => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(cartReducer, { items: [], bundles: [] });
+  const [state, dispatch] = useReducer(cartReducer, { items: [], bundles: [], scanSampleIds: [] });
 
   // Prize lines are free giveaways: they never contribute to the sale total
   // (they're recorded separately as prizes).
@@ -206,6 +213,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       value={{
         items: state.items,
         bundles: state.bundles,
+        scanSampleIds: state.scanSampleIds,
         total,
         addItem: (product) => dispatch({ type: 'ADD_ITEM', product }),
         addPrize: (product) => dispatch({ type: 'ADD_PRIZE', product }),
@@ -221,6 +229,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             bundle: { ...bundle, cartId: `${Date.now()}-${Math.random()}` },
           }),
         removeBundle: (cartId) => dispatch({ type: 'REMOVE_BUNDLE', cartId }),
+        addScanSample: (clientUuid) => dispatch({ type: 'ADD_SCAN_SAMPLE', clientUuid }),
       }}
     >
       {children}

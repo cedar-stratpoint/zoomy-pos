@@ -1459,3 +1459,81 @@ grant execute on function public.upsert_pos_event(jsonb)        to anon;
 grant execute on function public.close_pos_event(uuid, numeric) to anon;
 -- Coop-only (service_role); the POS never calls this, so anon is deliberately not granted.
 grant execute on function public.attribute_untagged_orders_to_event(uuid) to service_role;
+
+-- ── Photo scan training samples (added 2026-10-21, scan_samples_2026-10-21.sql) ──
+-- Confirmed scans kept for training: photo in the private pos-scan-samples bucket
+-- (anon insert-only), row via record_pos_scan_sample. No anon read. See that file.
+-- ── 1. Table ───────────────────────────────────────────────────────────────
+create table if not exists public.pos_scan_samples (
+  client_uuid             uuid primary key,
+  photo_path              text not null,
+  width                   integer not null,
+  height                  integer not null,
+  model                   text,
+  -- The scanner's answer: {items: [{sku, quantity}], unsure: [{candidates, quantity, box}], unmatched_count}.
+  prediction              jsonb not null,
+  -- The cashier-confirmed truth: {counts, bundles, unsure, edited}. Shape versioned by label_version.
+  label                   jsonb not null,
+  label_version           integer not null,
+  -- pos_orders.client_uuid of the sale; null when the cart was dropped before checkout.
+  transaction_client_uuid text,
+  created_at              timestamptz not null,
+  received_at             timestamptz not null default now()
+);
+
+create index if not exists pos_scan_samples_created_at_idx on public.pos_scan_samples (created_at);
+create index if not exists pos_scan_samples_transaction_idx on public.pos_scan_samples (transaction_client_uuid);
+
+alter table public.pos_scan_samples enable row level security;
+-- Deliberately no policies: anon cannot read training data.
+
+-- ── 2. Write RPC ───────────────────────────────────────────────────────────
+create or replace function public.record_pos_scan_sample(p_sample jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uuid uuid := (p_sample->>'client_uuid')::uuid;
+  v_path text := p_sample->>'photo_path';
+begin
+  if v_path is null or v_path !~ ('^[0-9]{4}-[0-9]{2}/' || v_uuid::text || '\.jpg$') then
+    raise exception 'photo_path must be YYYY-MM/<client_uuid>.jpg' using errcode = 'check_violation';
+  end if;
+
+  insert into pos_scan_samples (
+    client_uuid, photo_path, width, height, model, prediction, label,
+    label_version, transaction_client_uuid, created_at
+  ) values (
+    v_uuid,
+    v_path,
+    (p_sample->>'width')::integer,
+    (p_sample->>'height')::integer,
+    nullif(p_sample->>'model', ''),
+    p_sample->'prediction',
+    p_sample->'label',
+    (p_sample->>'label_version')::integer,
+    nullif(p_sample->>'transaction_client_uuid', ''),
+    coalesce((p_sample->>'created_at')::timestamptz, now())
+  )
+  on conflict (client_uuid) do update
+    set transaction_client_uuid = coalesce(pos_scan_samples.transaction_client_uuid, excluded.transaction_client_uuid);
+end;
+$$;
+
+revoke all on function public.record_pos_scan_sample(jsonb) from public;
+grant execute on function public.record_pos_scan_sample(jsonb) to anon;
+
+-- ── 3. Private photo bucket ────────────────────────────────────────────────
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('pos-scan-samples', 'pos-scan-samples', false, 2097152, array['image/jpeg'])
+on conflict (id) do nothing;
+
+drop policy if exists pos_scan_samples_anon_insert on storage.objects;
+create policy pos_scan_samples_anon_insert on storage.objects
+  for insert to anon
+  with check (
+    bucket_id = 'pos-scan-samples'
+    and name ~ '^[0-9]{4}-[0-9]{2}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jpg$'
+  );
