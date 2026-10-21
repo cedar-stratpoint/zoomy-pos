@@ -91,26 +91,41 @@ describe('PhotoScanResultsSheet', () => {
     expect(getByText('Bundles cost ₱100.00 more')).toBeTruthy();
   });
 
-  it('explains a bundle the packs cannot fill', () => {
-    const { getByText, getByTestId } = render(
-      <PhotoScanResultsSheet {...baseProps} initialItems={[{ product: salmon, quantity: 3 }]} />,
+  it('only lists bundles the packs can fill', () => {
+    const buyAny2 = pickBundle({ id: 11, name: 'Buy Any 2', price: 350, pick_count: 2 });
+    const { getByText, queryByText } = render(
+      <PhotoScanResultsSheet
+        {...baseProps}
+        initialItems={[{ product: salmon, quantity: 3 }]}
+        pickBundles={[buyAny4, buyAny2]}
+      />,
     );
 
-    expect(getByText('Needs 4 eligible packs, 3 left')).toBeTruthy();
-    expect(getByTestId('bundle-10-increment').props.accessibilityState).toMatchObject({ disabled: true });
+    expect(getByText('Buy Any 2')).toBeTruthy();
+    expect(queryByText('Buy Any 4')).toBeNull();
   });
 
-  it('hides the bundle list when there are no bundles', () => {
-    const { queryByText } = render(<PhotoScanResultsSheet {...baseProps} pickBundles={[]} />);
+  it('keeps a bundle listed after its packs are used by another bundle', () => {
+    const buyAny2 = pickBundle({ id: 11, name: 'Buy Any 2', price: 350, pick_count: 2 });
+    const { getByTestId } = render(<PhotoScanResultsSheet {...baseProps} pickBundles={[buyAny4, buyAny2]} />);
+
+    expect(getByTestId('bundle-10-count').props.children).toBe(1);
+    expect(getByTestId('bundle-11-increment').props.accessibilityState).toMatchObject({ disabled: true });
+  });
+
+  it('hides the bundle list when no bundle fits the packs', () => {
+    const { queryByText } = render(
+      <PhotoScanResultsSheet {...baseProps} initialItems={[{ product: salmon, quantity: 3 }]} />,
+    );
 
     expect(queryByText('Bundles')).toBeNull();
   });
 
   it('drops back to the suggestion when an edit leaves a chosen bundle unfillable', () => {
-    const { getAllByTestId, getByText, getByTestId } = render(<PhotoScanResultsSheet {...baseProps} />);
+    const { getAllByTestId, getByText, queryByTestId } = render(<PhotoScanResultsSheet {...baseProps} />);
 
     fireEvent.press(getAllByTestId('qty-decrement')[0]);
-    expect(getByTestId('bundle-10-count').props.children).toBe(0);
+    expect(queryByTestId('bundle-10')).toBeNull();
 
     fireEvent.press(getByText('Add to sale'));
     expect(baseProps.onConfirm).toHaveBeenCalledWith({
