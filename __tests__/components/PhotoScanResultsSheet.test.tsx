@@ -89,6 +89,7 @@ describe('PhotoScanResultsSheet', () => {
     expect(baseProps.onConfirm).toHaveBeenCalledWith({
       bundles: [],
       singles: [{ product: salmon, quantity: 2 }, { product: beef, quantity: 2 }],
+      unsureAnswers: [],
     });
   });
 
@@ -142,6 +143,7 @@ describe('PhotoScanResultsSheet', () => {
     expect(baseProps.onConfirm).toHaveBeenCalledWith({
       bundles: [],
       singles: [{ product: salmon, quantity: 1 }, { product: beef, quantity: 2 }],
+      unsureAnswers: [],
     });
   });
 
@@ -255,6 +257,24 @@ describe('PhotoScanResultsSheet', () => {
       expect(getByText('2 packs need a check')).toBeTruthy();
       fireEvent.press(getByTestId('unsure-option-20'));
       expect(getByText('1 pack needs a check')).toBeTruthy();
+    });
+
+    it('reports how each unsure pack was answered', () => {
+      const packs = [unsure, { ...unsure, id: 1 }, { ...unsure, id: 2 }];
+      const { getByTestId, getByText } = render(<PhotoScanResultsSheet {...props} unsurePacks={packs} />);
+
+      fireEvent.press(getByTestId('unsure-option-20'));
+      fireEvent.press(getByTestId('unsure-skip'));
+      fireEvent.press(getByTestId('unsure-something-else'));
+      fireEvent.changeText(getByTestId('product-picker-search'), 'beef');
+      fireEvent.press(getByTestId('product-picker-2'));
+      fireEvent.press(getByText('Add to sale'));
+
+      expect(props.onConfirm.mock.calls[0][0].unsureAnswers).toEqual([
+        { packId: 0, product: duckPear, via: 'candidate' },
+        { packId: 1, product: null, via: 'skipped' },
+        { packId: 2, product: beef, via: 'other' },
+      ]);
     });
 
     it('offers only the product list when the scanner had no guess', () => {

@@ -16,13 +16,17 @@ import { ScanProgress, type ScanStage } from '../../components/ScanProgress';
 import { F, R, type Palette } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { PRESS_OPACITY_PRIMARY } from '../../constants/motion';
-import { cropPack, resizeForScan, type ScanPhoto } from '../../utils/photo-scan/prepare-photo';
-import { scanProducts, ScanError } from '../../utils/photo-scan/scan-products';
+import { cropPack, resizeForScan, type PreparedPhoto, type ScanPhoto } from '../../utils/photo-scan/prepare-photo';
+import { scanProducts, ScanError, type ScanResult } from '../../utils/photo-scan/scan-products';
 import { matchScanItems, matchUnsure, type MatchResult, type UnsurePack } from '../../utils/photo-scan/match-scan';
+import { saveTrainingSample } from '../../utils/photo-scan/save-training-sample';
 
 type Phase = 'choose' | 'camera' | 'scanning' | 'results';
 type Photo = { uri: string; width: number; height: number };
 type ScanOutcome = {
+  /** The resized photo the scanner read, and its raw answer: kept as a training sample. */
+  photo: PreparedPhoto;
+  scan: ScanResult;
   match: MatchResult;
   unsure: UnsurePack[];
   /** Every sellable product, for picking an unsure pack by hand. */
@@ -48,7 +52,7 @@ const PICKER_OPTIONS: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'],
 export default function PhotoScanModal() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { addItem, addBundle } = useCart();
+  const { addItem, addBundle, addScanSample } = useCart();
   const { showToast } = useToast();
   const blockedByDemo = useDemoGuard();
   const [phase, setPhase] = useState<Phase>('choose');
@@ -104,6 +108,8 @@ export default function PhotoScanModal() {
       ]);
       setStage('matching');
       setOutcome({
+        photo: prepared,
+        scan,
         match: matchScanItems(scan.items, products),
         unsure: await withCrops(matchUnsure(scan.unsure, products), prepared),
         catalog: products.filter((p) => p.price != null),
@@ -118,8 +124,9 @@ export default function PhotoScanModal() {
     }
   }
 
-  function handleConfirm({ bundles, singles }: PhotoScanConfirmation) {
+  function handleConfirm(confirmation: PhotoScanConfirmation) {
     if (blockedByDemo()) return;
+    const { bundles, singles } = confirmation;
     for (const { bundle, items } of bundles) {
       addBundle({ presetId: bundle.id, name: bundle.name, price: bundle.price, items });
     }
@@ -130,7 +137,24 @@ export default function PhotoScanModal() {
     }
     const packs = [...bundles.flatMap((b) => b.items), ...singles].reduce((sum, i) => sum + i.quantity, 0);
     showToast({ variant: 'success', title: 'Added to sale', message: `${packs} ${packs === 1 ? 'pack' : 'packs'}` });
+    keepForTraining(confirmation);
     router.back();
+  }
+
+  /** Saves the photo with what was really in it. Best-effort: it never blocks the sale. */
+  function keepForTraining({ bundles, singles, unsureAnswers }: PhotoScanConfirmation) {
+    if (!outcome) return;
+    const label = {
+      matched: outcome.match.matched,
+      unsurePacks: outcome.unsure,
+      bundles,
+      singles,
+      unsureAnswers,
+      catalog: outcome.catalog,
+    };
+    saveTrainingSample(outcome.photo, outcome.scan, outcome.match.unmatchedCount, label)
+      .then(addScanSample)
+      .catch((err) => console.warn('Scan sample not saved:', err));
   }
 
   function scanAgain() {

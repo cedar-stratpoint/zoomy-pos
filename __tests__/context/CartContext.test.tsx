@@ -115,6 +115,15 @@ describe('useCart', () => {
     expect(result.current.total).toBe(0);
   });
 
+  it('holds scan samples until the cart is cleared', () => {
+    const { result } = renderHook(() => useCart(), { wrapper });
+    act(() => result.current.addScanSample('scan-1'));
+    act(() => result.current.addScanSample('scan-2'));
+    expect(result.current.scanSampleIds).toEqual(['scan-1', 'scan-2']);
+    act(() => result.current.clearCart());
+    expect(result.current.scanSampleIds).toEqual([]);
+  });
+
   it('throws when used outside CartProvider', () => {
     expect(() => renderHook(() => useCart())).toThrow('useCart must be used within CartProvider');
   });

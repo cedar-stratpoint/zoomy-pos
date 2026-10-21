@@ -20,6 +20,14 @@ export type UnsurePack = {
   cropUri: string | null;
 };
 
+/** How the cashier answered an unsure pack: one of its guesses, another product, or skipped. */
+export type UnsureAnswer = {
+  packId: number;
+  /** Null when skipped. */
+  product: Product | null;
+  via: 'candidate' | 'other' | 'skipped';
+};
+
 /** A scanned line resolved to a sellable local product. */
 export type MatchedItem = { product: Product; quantity: number };
 

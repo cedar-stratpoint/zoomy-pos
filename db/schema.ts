@@ -1,6 +1,48 @@
+import type { SQLiteDatabase } from 'expo-sqlite';
 import { getDatabase } from './database';
 
+/** scan_samples columns, shared by its CREATE and its one-time rebuild. */
+const SCAN_SAMPLES_COLUMNS = `
+      client_uuid TEXT PRIMARY KEY,
+      photo_uri TEXT,
+      photo_base64 TEXT,
+      width INTEGER NOT NULL,
+      height INTEGER NOT NULL,
+      model TEXT,
+      prediction_json TEXT NOT NULL,
+      label_json TEXT NOT NULL,
+      label_version INTEGER NOT NULL,
+      transaction_client_uuid TEXT,
+      created_at TEXT NOT NULL,
+      photo_synced_at TEXT,
+      synced_at TEXT
+`;
+
+/** Columns both scan_samples layouts have, copied across by the rebuild. */
+const SCAN_SAMPLES_KEPT_COLUMNS = [
+  'client_uuid', 'photo_uri', 'width', 'height', 'model', 'prediction_json', 'label_json',
+  'label_version', 'transaction_client_uuid', 'created_at', 'photo_synced_at', 'synced_at',
+].join(', ');
+
 const DEFAULT_PIN_HASH = '9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0'; // SHA-256 of '0000'
+
+/**
+ * The first scan_samples layout (2026-10-21, never released) had photo_uri NOT NULL
+ * and no photo_base64, so a web sample (photo inline, no file) failed to insert.
+ * SQLite cannot relax NOT NULL in place, so a table without photo_base64 is
+ * rebuilt once, keeping its rows. A no-op on every later launch.
+ */
+async function upgradeScanSamplesTable(db: SQLiteDatabase): Promise<void> {
+  const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(scan_samples)');
+  if (columns.length === 0 || columns.some((c) => c.name === 'photo_base64')) return;
+  await db.withTransactionAsync(() => db.execAsync(`
+    ALTER TABLE scan_samples RENAME TO scan_samples_v1;
+    CREATE TABLE scan_samples (${SCAN_SAMPLES_COLUMNS});
+    INSERT INTO scan_samples (${SCAN_SAMPLES_KEPT_COLUMNS})
+      SELECT ${SCAN_SAMPLES_KEPT_COLUMNS} FROM scan_samples_v1;
+    DROP TABLE scan_samples_v1;
+  `));
+}
 
 export async function initSchema(): Promise<void> {
   const db = await getDatabase();
@@ -125,7 +167,19 @@ export async function initSchema(): Promise<void> {
       won_at TEXT,
       synced_at TEXT
     );
+
+    -- Photo scan training sample: a confirmed scan's photo (the 1500px JPEG the
+    -- scanner read), what the scanner said and what the cashier added to the sale.
+    -- Kept to train and test scan models on real bazaar photos. Uploaded in two
+    -- steps (photo, then row), each idempotent on client_uuid; see
+    -- utils/scan-samples-sync.ts. transaction_client_uuid is set at checkout.
+    -- The photo is a file on native (photo_uri) and base64 in the row on web
+    -- (photo_base64), where the scanned image is a blob URL that dies on reload.
+    -- Exactly one is set, and both are cleared once Coop has the sample.
+    CREATE TABLE IF NOT EXISTS scan_samples (${SCAN_SAMPLES_COLUMNS});
   `);
+
+  await upgradeScanSamplesTable(db);
 
   // Add payment_method column to existing databases
   await db.runAsync(

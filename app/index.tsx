@@ -40,6 +40,7 @@ import { getEnabledPaymentMethods, getConfirmOnPay } from '../db/settings';
 import { buildInsertItems } from '../utils/cart-transaction';
 import { pushSale } from '../utils/sales-sync';
 import { insertOrderPrize, markOrderPrizeSynced } from '../db/order-prizes';
+import { linkScanSamplesToTransaction } from '../db/scan-samples';
 import { pushOrderPrize } from '../utils/order-prizes-sync';
 import { lineEmojis } from '../utils/bundles';
 import { emojiGraphemes } from '../constants/emoji';
@@ -119,7 +120,7 @@ export default function POSScreen() {
   // A new category remounts the grid at the top, which fires no scroll event.
   useEffect(() => setScanFabCollapsed(false), [sel.category, sel.subcategory]);
 
-  const { items, bundles, total, addItem, removeItem, decrementItem, clearCart } = useCart();
+  const { items, bundles, scanSampleIds, total, addItem, removeItem, decrementItem, clearCart } = useCart();
   const { showToast } = useToast();
   const blockedByDemo = useDemoGuard();
 
@@ -470,6 +471,10 @@ export default function POSScreen() {
         petType: salePetType,
         items: saleItems,
       });
+      // Tie this sale's photo scans to it, so each training sample knows its sale.
+      // Best-effort: a training label never blocks recording a sale.
+      await linkScanSamplesToTransaction(scanSampleIds, clientUuid)
+        .catch((err) => console.warn('Scan samples not linked:', err));
       // Record each prize locally against this sale's client_uuid (durable,
       // synced_at null so the outbox pushes it after the sale lands on Coop).
       for (const pr of prizeRows) {
