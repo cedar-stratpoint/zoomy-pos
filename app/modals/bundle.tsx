@@ -14,7 +14,9 @@ import { bundlePreviewText, lineEmojis } from '../../utils/bundles';
 import { useToast } from '../../components/Toast';
 import { F, R, type Palette } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
+import { TourTarget } from '../../components/tour/TourTarget';
 import { PRODUCT_EMOJIS, MAX_EMOJI, emojiGraphemes, clampEmoji } from '../../constants/emoji';
+import { PRESS_OPACITY } from '../../constants/motion';
 
 const MIN_ITEMS = 1;
 
@@ -131,6 +133,7 @@ export default function BundleModal() {
           </View>
         </View>
 
+        <TourTarget id="bundle-size">
         <View style={styles.field}>
           <Text style={styles.label}>Amount of items</Text>
           <View style={styles.sizeRow}>
@@ -156,6 +159,9 @@ export default function BundleModal() {
           </View>
         </View>
 
+        </TourTarget>
+
+        <TourTarget id="bundle-lines">
         <View style={styles.field}>
           <Text style={styles.label}>Product lines</Text>
           {lines.length === 0 ? (
@@ -168,7 +174,7 @@ export default function BundleModal() {
                   key={line}
                   style={[styles.lineRow, on && styles.lineRowOn]}
                   onPress={() => toggleLine(line)}
-                  activeOpacity={0.7}
+                  activeOpacity={PRESS_OPACITY}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: on }}
                 >
@@ -181,6 +187,8 @@ export default function BundleModal() {
             })
           )}
         </View>
+
+        </TourTarget>
 
         <View style={styles.field}>
           <Text style={styles.label}>Tile emoji</Text>
@@ -223,6 +231,7 @@ export default function BundleModal() {
         </Text>
       </ScrollView>
 
+      <TourTarget id="bundle-save">
       <View style={styles.footer}>
         <TouchableOpacity style={styles.cancelBtn} onPress={() => router.dismiss()}>
           <Text style={styles.cancelText}>Cancel</Text>
@@ -231,6 +240,7 @@ export default function BundleModal() {
           <Text style={styles.saveText}>{editingId != null ? 'Update bundle' : 'Save bundle'}</Text>
         </TouchableOpacity>
       </View>
+      </TourTarget>
     </SafeAreaView>
   );
 }

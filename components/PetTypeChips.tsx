@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import type { PetType } from '../db/transactions';
+import { PRESS_OPACITY_PRIMARY } from '../constants/motion';
 
 type Props = {
   value: PetType | null;
@@ -40,7 +41,7 @@ export function PetTypeChips({ value, onChange, disabled }: Props) {
               style={[styles.chip, active && styles.chipActive, disabled && styles.chipDisabled]}
               onPress={() => pick(opt.key)}
               disabled={disabled}
-              activeOpacity={0.85}
+              activeOpacity={PRESS_OPACITY_PRIMARY}
               accessibilityRole="button"
               accessibilityState={{ selected: active, disabled: Boolean(disabled) }}
               accessibilityLabel={`Tag sale as ${opt.label}`}

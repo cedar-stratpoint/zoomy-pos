@@ -3,6 +3,7 @@ import { TouchableOpacity, Text, View, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { PRESS_OPACITY } from '../constants/motion';
 
 type Props = {
   id: number;
@@ -49,7 +50,7 @@ export function ProductTile({ id, name, price, hasVariants, imageUri, emoji, bad
       style={[styles.tile, active && styles.tileActive, isOutOfStock && styles.tileOutOfStock]}
       onPress={() => onPress(id)}
       onLongPress={() => onLongPress(id)}
-      activeOpacity={0.7}
+      activeOpacity={PRESS_OPACITY}
     >
       {isOutOfStock && (
         <View style={styles.outOfStockTag} testID="out-of-stock-tag">
@@ -94,7 +95,7 @@ export function ProductTile({ id, name, price, hasVariants, imageUri, emoji, bad
             e?.stopPropagation?.();
             onRemove(id);
           }}
-          activeOpacity={0.7}
+          activeOpacity={PRESS_OPACITY}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityLabel={`Remove all ${name}`}
         >
@@ -110,7 +111,7 @@ export function ProductTile({ id, name, price, hasVariants, imageUri, emoji, bad
               e?.stopPropagation?.();
               onMinus(id);
             }}
-            activeOpacity={0.7}
+            activeOpacity={PRESS_OPACITY}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }}
           >
             <Text style={styles.qtyMinusText}>−</Text>

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { TouchableOpacity, Text, View, StyleSheet } from 'react-native';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { PRESS_OPACITY } from '../constants/motion';
 
 type Props = {
   onPress: () => void;
@@ -21,7 +22,7 @@ export function PrizeTile({ onPress }: Props) {
       testID="prize-tile"
       style={styles.tile}
       onPress={onPress}
-      activeOpacity={0.7}
+      activeOpacity={PRESS_OPACITY}
       accessibilityRole="button"
       accessibilityLabel="Add a free item (prize)"
     >

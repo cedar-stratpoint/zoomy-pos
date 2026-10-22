@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Transaction } from '../db/transactions';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { PRESS_OPACITY } from '../constants/motion';
 
 type Props = { transaction: Transaction; onPress: (t: Transaction) => void; hasPrize?: boolean };
 
@@ -29,7 +30,7 @@ export function TransactionRow({ transaction, onPress, hasPrize }: Props) {
     <TouchableOpacity
       style={[styles.row, isVoided && styles.voided]}
       onPress={() => onPress(transaction)}
-      activeOpacity={0.7}
+      activeOpacity={PRESS_OPACITY}
     >
       <View style={{ flex: 1 }}>
         <View style={styles.topRow}>

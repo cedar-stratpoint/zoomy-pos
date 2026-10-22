@@ -1,16 +1,23 @@
-import { Modal, View, Text, TouchableOpacity, StyleSheet, Pressable, Platform, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { F, R, type Palette } from '../constants/theme';
+import { TourTarget } from './tour/TourTarget';
+import { Sheet } from './Sheet';
 
 // Upper drawer for the header actions. On narrow screens the row of action icons
 // can't fit next to the brand + sync + event chip, so they collapse into a single
-// menu button that opens this drawer (a panel that drops from the top). Only used
+// menu button that opens this drawer (a panel that slides down from the top,
+// where it lives, rather than fading in place). Only used
 // in the compact layout; wider screens keep the inline icon row.
 
 export interface HeaderMenuItem {
+  /** Stable id, also used to build the testID (`header-action-<key>`). */
+  key: string;
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
+  /** Overrides `label` for screen readers on the inline icon (e.g. "Switch to light mode"). */
+  accessibilityLabel?: string;
   onPress: () => void;
 }
 
@@ -26,30 +33,35 @@ export function HeaderMenuDrawer({
   const { colors } = useTheme();
   const s = makeStyles(colors);
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Close menu">
-        {/* Stops a tap on the panel from closing the drawer. */}
-        <Pressable style={s.panel} onPress={() => {}}>
-          <View style={s.grabber} />
-          {items.map((it, i) => (
-            <TouchableOpacity
-              key={it.label}
-              style={[s.row, i < items.length - 1 && s.rowDivider]}
-              onPress={() => {
-                onClose();
-                it.onPress();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={it.label}
-            >
-              <Ionicons name={it.icon} size={20} color={colors.textPrimary} />
-              <Text style={s.label}>{it.label}</Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={s.chevron} />
-            </TouchableOpacity>
-          ))}
-        </Pressable>
-      </Pressable>
-    </Modal>
+    <Sheet
+      visible={visible}
+      onRequestClose={onClose}
+      from="top"
+      backdropColor="rgba(0,0,0,0.5)"
+      onBackdropPress={onClose}
+      backdropLabel="Close menu"
+      style={s.panel}
+    >
+      <View style={s.grabber} />
+      {items.map((it, i) => (
+        <TourTarget key={it.key} id={`header-action-${it.key}`}>
+          <TouchableOpacity
+            testID={`header-drawer-${it.key}`}
+            style={[s.row, i < items.length - 1 && s.rowDivider]}
+            onPress={() => {
+              onClose();
+              it.onPress();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={it.label}
+          >
+            <Ionicons name={it.icon} size={20} color={colors.textPrimary} />
+            <Text style={s.label}>{it.label}</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={s.chevron} />
+          </TouchableOpacity>
+        </TourTarget>
+      ))}
+    </Sheet>
   );
 }
 
@@ -57,7 +69,6 @@ const TOP_INSET = Platform.OS === 'ios' ? 47 : (StatusBar.currentHeight ?? 12);
 
 const makeStyles = (c: Palette) =>
   StyleSheet.create({
-    backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-start' },
     panel: {
       backgroundColor: c.surface,
       paddingTop: TOP_INSET + 4,

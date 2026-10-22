@@ -4,6 +4,7 @@ import * as txs from '../../db/transactions';
 import * as salesSync from '../../utils/sales-sync';
 import * as ordersRemote from '../../utils/orders-remote';
 import * as syncStatus from '../../utils/sync-status';
+import * as scanSamplesSync from '../../utils/scan-samples-sync';
 
 jest.mock('../../db/transactions', () => ({
   getPendingSyncTransactions: jest.fn(),
@@ -34,6 +35,8 @@ jest.mock('../../db/order-prizes', () => ({
   countPendingOrderPrizes: jest.fn().mockResolvedValue(0),
 }));
 jest.mock('../../utils/order-prizes-sync', () => ({ drainOrderPrizes: jest.fn().mockResolvedValue({ pushed: 0, failed: 0 }) }));
+// Scan training samples drain in the background after every Coop write.
+jest.mock('../../utils/scan-samples-sync', () => ({ drainScanSamples: jest.fn().mockResolvedValue({ pushed: 0, failed: 0 }) }));
 jest.mock('../../utils/sync-status', () => ({
   beginSync: jest.fn(),
   endSync: jest.fn(),
@@ -99,6 +102,19 @@ describe('drainOutbox', () => {
     expect(syncStatus.beginSync).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
     expect(syncStatus.setPendingCount).toHaveBeenCalled(); // still refreshes the marker
+  });
+
+  it('uploads scan training samples only after the sales, outside the result', async () => {
+    mockTxs.getPendingSyncTransactions.mockResolvedValue([tx({ id: 1, client_uuid: 'u1' })]);
+    mockPush.mockResolvedValue({ ok: true });
+    const drainSamples = scanSamplesSync.drainScanSamples as jest.Mock;
+    drainSamples.mockResolvedValue({ pushed: 3, failed: 0 });
+
+    const res = await drainOutbox();
+
+    expect(drainSamples).toHaveBeenCalledTimes(1);
+    expect(drainSamples.mock.invocationCallOrder[0]).toBeGreaterThan(mockPush.mock.invocationCallOrder[0]);
+    expect(res).toEqual({ pushed: 1, failed: 0 });
   });
 
   it('pushes an unsynced sale and marks it synced', async () => {

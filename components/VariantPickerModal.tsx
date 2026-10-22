@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, Modal,
+  View, Text, FlatList, TouchableOpacity,
   StyleSheet, SafeAreaView,
 } from 'react-native';
 import { ProductTile } from './ProductTile';
@@ -8,6 +8,8 @@ import { ProductVariant } from '../db/products';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { useColumns } from '../hooks/useColumns';
+import { TourTarget } from './tour/TourTarget';
+import { Sheet } from './Sheet';
 
 type Props = {
   visible: boolean;
@@ -70,61 +72,58 @@ export function VariantPickerModal({ visible, productName, variants, initialQuan
   const totalPrice = variants.reduce((s, v) => s + v.price * (quantities[v.id] ?? 0), 0);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <SafeAreaView style={styles.sheet}>
-          <Text style={styles.title}>{productName}</Text>
-          <Text style={styles.subtitle}>Select variants</Text>
+    <Sheet visible={visible} onRequestClose={onClose} backdropColor={BACKDROP} style={styles.sheet}>
+      <SafeAreaView style={styles.sheetContent}>
+        <Text style={styles.title}>{productName}</Text>
+        <Text style={styles.subtitle}>Select variants</Text>
 
-          <FlatList
-            key={numColumns}
-            data={variants}
-            keyExtractor={(v) => String(v.id)}
-            numColumns={numColumns}
-            contentContainerStyle={styles.grid}
-            columnWrapperStyle={styles.row}
-            renderItem={({ item }) => (
-              <View style={[styles.tileWrapper, { maxWidth: tileMaxWidth }]}>
-                <ProductTile
-                  id={item.id}
-                  name={item.name}
-                  price={item.price}
-                  badgeCount={quantities[item.id] ?? 0}
-                  onPress={() => increment(item.id)}
-                  onLongPress={() => remove(item.id)}
-                  onMinus={() => decrement(item.id)}
-                />
-              </View>
-            )}
-            ListEmptyComponent={
-              <Text style={styles.empty}>No active variants for this product.</Text>
-            }
-          />
+        <TourTarget id="variant-options" style={{ flexShrink: 1 }}>
+        <FlatList
+          key={numColumns}
+          data={variants}
+          keyExtractor={(v) => String(v.id)}
+          numColumns={numColumns}
+          contentContainerStyle={styles.grid}
+          columnWrapperStyle={styles.row}
+          renderItem={({ item }) => (
+            <View style={[styles.tileWrapper, { maxWidth: tileMaxWidth }]}>
+              <ProductTile
+                id={item.id}
+                name={item.name}
+                price={item.price}
+                badgeCount={quantities[item.id] ?? 0}
+                onPress={() => increment(item.id)}
+                onLongPress={() => remove(item.id)}
+                onMinus={() => decrement(item.id)}
+              />
+            </View>
+          )}
+          ListEmptyComponent={
+            <Text style={styles.empty}>No active variants for this product.</Text>
+          }
+        />
+        </TourTarget>
 
-          <View style={styles.footer}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.doneBtn} onPress={handleDone}>
-              <Text style={styles.doneText}>
-                {totalItems > 0
-                  ? `Done (${totalItems} item${totalItems !== 1 ? 's' : ''} — ₱${totalPrice.toFixed(2)})`
-                  : 'Done'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </View>
-    </Modal>
+        <View style={styles.footer}>
+          <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.doneBtn} onPress={handleDone}>
+            <Text style={styles.doneText}>
+              {totalItems > 0
+                ? `Done (${totalItems} item${totalItems !== 1 ? 's' : ''} — ₱${totalPrice.toFixed(2)})`
+                : 'Done'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </Sheet>
   );
 }
 
+const BACKDROP = 'rgba(0,0,0,0.75)';
+
 const makeStyles = (c: Palette) => StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    justifyContent: 'flex-end',
-  },
   sheet: {
     backgroundColor: c.bg,
     borderTopLeftRadius: R.xl,
@@ -133,6 +132,7 @@ const makeStyles = (c: Palette) => StyleSheet.create({
     borderColor: c.borderDark,
     maxHeight: '85%',
   },
+  sheetContent: { flexShrink: 1 },
   title: {
     color: c.textPrimary,
     fontSize: F.xl,

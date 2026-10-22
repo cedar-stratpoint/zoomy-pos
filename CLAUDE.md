@@ -40,6 +40,8 @@ The principles below apply to **all sessions** on this project.
   - **`emil-design-eng`** — Emil Kowalski's philosophy on UI polish, component design, animation decisions, and the invisible details that make software feel great.
   - **`impeccable`** — designing, redesigning, critiquing, and polishing interfaces: visual hierarchy, spacing, typography, color, motion, accessibility, and reusable design systems.
   - **`design-taste-frontend`** ("Taste") — anti-slop frontend design for landing pages, portfolios, and redesigns that don't look templated.
+  - **`ui-ux-pro-max`** — searchable design-intelligence database (79 UI styles, 192 palettes, 74 font pairings, 119 UX guidelines, 25 chart types, 22 stacks). For the POS app, query it with `--stack react-native`: `python3 ~/.claude/skills/ui-ux-pro-max/scripts/search.py --domain <style|color|typography|ux|chart|…> --stack react-native "<query>"` to ground style/palette/type/chart decisions before building. Installed from https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.
+  - **`design-motion-principles`** — motion and interaction design (Emil Kowalski, Jakub Krehel, Jhey Tompkins). **Create** mode builds components with purposeful motion; **Audit** mode reviews existing animations for AI-slop motion. Use for transitions, press feedback, micro-interactions, and enter/exit animations. Its examples are web-first (React/Framer Motion/CSS), so apply the principles (frequency, purpose, easing, reduced motion) through Reanimated rather than copying code. Installed from https://github.com/kylezantos/design-motion-principles.
 
 # Code Quality
 

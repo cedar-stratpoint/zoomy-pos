@@ -20,7 +20,7 @@
       "bundleIdentifier": "com.anonymous.zoomy-pos",
       "icon": "./assets/icon.png",
       "infoPlist": {
-        "NSCameraUsageDescription": "ZoomyPOS needs camera access to take receipt photos as proof of payment.",
+        "NSCameraUsageDescription": "ZoomyPOS needs camera access to take receipt photos as proof of payment and to scan products.",
         "NSMicrophoneUsageDescription": "ZoomyPOS does not use the microphone.",
         "NSPhotoLibraryUsageDescription": "ZoomyPOS needs photo library access to upload your GCash QR code and save receipt photos."
       }
@@ -59,7 +59,7 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "ZoomyPOS needs camera access to take receipt photos as proof of payment.",
+          "cameraPermission": "ZoomyPOS needs camera access to take receipt photos as proof of payment and to scan products.",
           "microphonePermission": "ZoomyPOS does not use the microphone.",
           "photosPermission": "ZoomyPOS needs photo library access to upload your GCash QR code and save receipt photos."
         }

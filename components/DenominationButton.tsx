@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { PRESS_OPACITY } from '../constants/motion';
 
 type Props = { amount: number; onPress: (amount: number) => void };
 
@@ -9,7 +10,7 @@ export function DenominationButton({ amount, onPress }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
-    <TouchableOpacity style={styles.btn} onPress={() => onPress(amount)} activeOpacity={0.65}>
+    <TouchableOpacity style={styles.btn} onPress={() => onPress(amount)} activeOpacity={PRESS_OPACITY}>
       <Text style={styles.text}>₱{amount}</Text>
     </TouchableOpacity>
   );

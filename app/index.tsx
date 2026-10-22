@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View, FlatList, Text, TouchableOpacity, StyleSheet, SafeAreaView,
+  type NativeSyntheticEvent, type NativeScrollEvent,
   useWindowDimensions,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -19,8 +20,12 @@ import { ConfirmPaymentModal } from '../components/ConfirmPaymentModal';
 import { SyncStatusBar } from '../components/SyncStatusBar';
 import { EventBadge } from '../components/EventBadge';
 import { HeaderMenuDrawer, type HeaderMenuItem } from '../components/HeaderMenuDrawer';
+import { ScanFab } from '../components/ScanFab';
 import { FreeTasteQuickSheet } from '../components/FreeTasteQuickSheet';
 import { useToast } from '../components/Toast';
+import { useDemoGuard } from '../components/tour/useDemoGuard';
+import { TourTarget } from '../components/tour/TourTarget';
+import { useTour, useTourActive, useTourScene } from '../context/TourContext';
 import { useCart } from '../context/CartContext';
 import {
   getActiveProducts, getCategoriesWithSubcategories, getVariantsByProductId, decrementStock,
@@ -35,6 +40,7 @@ import { getEnabledPaymentMethods, getConfirmOnPay } from '../db/settings';
 import { buildInsertItems } from '../utils/cart-transaction';
 import { pushSale } from '../utils/sales-sync';
 import { insertOrderPrize, markOrderPrizeSynced } from '../db/order-prizes';
+import { linkScanSamplesToTransaction } from '../db/scan-samples';
 import { pushOrderPrize } from '../utils/order-prizes-sync';
 import { lineEmojis } from '../utils/bundles';
 import { emojiGraphemes } from '../constants/emoji';
@@ -58,10 +64,17 @@ const PRIZE_CATEGORY = 'Prize';
 // so a row fits the screen (short wide tiles on a phone in landscape) instead of
 // shrinking into unreadable squares.
 const GRID_H_CHROME = 24; // grid horizontal padding (12 * 2)
-const GRID_V_CHROME = 44; // grid vertical padding (12 + 24) plus one row margin (8)
+// Grid vertical padding (12 + 24) plus one row margin (8). The scan button's clearance
+// is left out on purpose: tiles size to the visible area and the clearance scrolls.
+const GRID_V_CHROME = 44;
+// Extra room under the last row so it can scroll clear of the floating scan button.
+const SCAN_FAB_CLEARANCE = 72;
+// How far the grid scrolls before the scan button tucks its label away.
+const SCAN_FAB_COLLAPSE_OFFSET = 24;
 const COL_GAP = 8; // gap between tiles in a row
 const TILE_ASPECT_PHONE = 0.85; // width / height; more compact on phones
 const TILE_ASPECT_TABLET = 0.65; // taller, showcase tiles on larger screens
+const MODAL_HANDOVER_MS = 450; // let a closing modal finish before the tour opens the next
 const MIN_TILE_HEIGHT = 128; // never shrink a tile below a usable height; scroll instead
 
 export default function POSScreen() {
@@ -74,6 +87,7 @@ export default function POSScreen() {
   // opens the upper drawer. Wider screens keep the inline icon row.
   const compactHeader = width < 520;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [scanFabCollapsed, setScanFabCollapsed] = useState(false);
   // Long-pressing a product tile opens a quick free-taste sheet for that product.
   const [freeTasteProduct, setFreeTasteProduct] = useState<Product | null>(null);
   // Layout follows device rotation: landscape pins a side cart, portrait uses a sheet.
@@ -103,9 +117,12 @@ export default function POSScreen() {
   const [groups, setGroups] = useState<CategoryGroup[]>([]);
   const [pickBundles, setPickBundles] = useState<SavedBundle[]>([]);
   const [sel, setSel] = useState<Selection>({ category: null, subcategory: null });
+  // A new category remounts the grid at the top, which fires no scroll event.
+  useEffect(() => setScanFabCollapsed(false), [sel.category, sel.subcategory]);
 
-  const { items, bundles, total, addItem, removeItem, decrementItem, clearCart } = useCart();
+  const { items, bundles, scanSampleIds, total, addItem, removeItem, decrementItem, clearCart } = useCart();
   const { showToast } = useToast();
+  const blockedByDemo = useDemoGuard();
 
   const [variantProduct, setVariantProduct] = useState<Product | null>(null);
   const [variantList, setVariantList] = useState<ProductVariant[]>([]);
@@ -194,6 +211,87 @@ export default function POSScreen() {
   // A catalog pull from Coop (price / listing / events) updates local SQLite;
   // re-read so tiles and the event chip reflect the pull without a screen focus.
   useEffect(() => subscribeCatalogChanged(() => { loadCatalog(); loadActiveEvent(); }), [loadCatalog, loadActiveEvent]);
+
+  // Guided tour: each step publishes a "scene" (which sheet is open, which pill is
+  // selected, ...). Apply the parts this screen owns; anything a scene omits is closed.
+  const tourScene = useTourScene();
+  const tourActive = useTourActive();
+  const { start: startTour } = useTour();
+  const selBeforeTour = useRef<Selection | null>(null);
+  const demoItemAdded = useRef(false);
+
+  useEffect(() => {
+    if (!tourScene) return;
+    let cancelled = false;
+    (async () => {
+      // iOS drops a modal presented while another is still dismissing, so when one
+      // sheet hands over to the next, close everything and let it finish first.
+      const wantsOverlayModal = !!tourScene.sheet || (compactHeader && !!tourScene.drawerOpen);
+      const someModalOpen = !!variantProduct || !!freeTasteProduct || confirmPay || menuOpen;
+      if (wantsOverlayModal && someModalOpen) {
+        setVariantProduct(null);
+        setVariantList([]);
+        setFreeTasteProduct(null);
+        setConfirmPay(false);
+        setMenuOpen(false);
+        await new Promise((r) => setTimeout(r, MODAL_HANDOVER_MS));
+        if (cancelled) return;
+      }
+      const variantProductForTour =
+        tourScene.sheet === 'variant' ? products.find((p) => p.has_variants === 1) : undefined;
+      const variants = variantProductForTour ? await getVariantsByProductId(variantProductForTour.id) : [];
+      if (cancelled) return;
+      setVariantList(variants);
+      setVariantProduct(variantProductForTour ?? null);
+      setFreeTasteProduct(tourScene.sheet === 'free-taste' ? products[0] ?? null : null);
+      setConfirmPay(tourScene.sheet === 'confirm-pay');
+      setMenuOpen(compactHeader && !!tourScene.drawerOpen);
+
+      const wanted =
+        tourScene.category === 'prize' ? PRIZE_CATEGORY
+        : tourScene.category === 'bundles' && pickBundles.length > 0 ? BUNDLES_CATEGORY
+        : null;
+      if (wanted) {
+        selBeforeTour.current ??= sel;
+        setSel({ category: wanted, subcategory: null });
+      } else if (selBeforeTour.current) {
+        setSel(selBeforeTour.current);
+        selBeforeTour.current = null;
+      }
+    })();
+    return () => { cancelled = true; };
+    // Only a new scene should re-apply; the other values are read at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tourScene]);
+
+  // When the tour ends, close whatever it opened and put the category back.
+  useEffect(() => {
+    if (tourActive) return;
+    setVariantProduct(null);
+    setVariantList([]);
+    setFreeTasteProduct(null);
+    setConfirmPay(false);
+    setMenuOpen(false);
+    if (selBeforeTour.current) {
+      setSel(selBeforeTour.current);
+      selBeforeTour.current = null;
+    }
+  }, [tourActive]);
+
+  // The cart steps need something to show: hold one demo line in the in-memory
+  // cart while the tour runs (never persisted), and remove it when the tour ends.
+  useEffect(() => {
+    if (tourActive && !demoItemAdded.current && items.length === 0) {
+      const demo = products.find((p) => !p.has_variants && p.price != null);
+      if (demo) {
+        addItem({ id: demo.id, name: demo.name, price: demo.price! });
+        demoItemAdded.current = true;
+      }
+    } else if (!tourActive && demoItemAdded.current) {
+      demoItemAdded.current = false;
+      clearCart();
+    }
+  }, [tourActive, products, items.length, addItem, clearCart]);
 
   const showingBundles = sel.category === BUNDLES_CATEGORY;
   const showingPrize = sel.category === PRIZE_CATEGORY;
@@ -304,6 +402,7 @@ export default function POSScreen() {
   // Confirmed: record the sale with the selected quick method, then push to Coop.
   async function handleConfirmPay() {
     setConfirmPay(false);
+    if (blockedByDemo()) return;
     // Split prize (spin-a-wheel free item) lines out of the paid sale. Paid lines
     // go through the unchanged sale path; prize lines are recorded separately as
     // prizes and never sent as sale items (so a normal sale is unaffected).
@@ -343,6 +442,10 @@ export default function POSScreen() {
         petType: salePetType,
         items: saleItems,
       });
+      // Tie this sale's photo scans to it, so each training sample knows its sale.
+      // Best-effort: a training label never blocks recording a sale.
+      await linkScanSamplesToTransaction(scanSampleIds, clientUuid)
+        .catch((err) => console.warn('Scan samples not linked:', err));
       // Record each prize locally against this sale's client_uuid (durable,
       // synced_at null so the outbox pushes it after the sale lands on Coop).
       for (const pr of prizeRows) {
@@ -427,9 +530,19 @@ export default function POSScreen() {
     }
   }
 
+  // Keeps pull-to-refresh's scroll handling and shrinks the scan button once the grid scrolls.
+  const withScanFab = (scroll: { onScroll: (e: NativeSyntheticEvent<NativeScrollEvent>) => void; scrollEventThrottle: number }) => ({
+    ...scroll,
+    onScroll: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      scroll.onScroll(e);
+      setScanFabCollapsed(e.nativeEvent.contentOffset.y > SCAN_FAB_COLLAPSE_OFFSET);
+    },
+  });
+
   const productPane = (
     <View style={styles.productPane}>
       <View style={styles.filters}>
+        <TourTarget id="pills">
         <CategoryTabs
           categories={categoryNames}
           active={sel.category ?? ''}
@@ -441,6 +554,7 @@ export default function POSScreen() {
             )
           }
         />
+        </TourTarget>
         {subs.length > 0 && (
           <SubcategoryFilter
             subcategories={subs}
@@ -449,6 +563,7 @@ export default function POSScreen() {
           />
         )}
       </View>
+      <TourTarget id="grid" style={styles.gridArea}>
       <View
         style={styles.gridArea}
         onLayout={(e) => setGridHeight(e.nativeEvent.layout.height)}
@@ -456,7 +571,7 @@ export default function POSScreen() {
       <PullToRefresh onRefresh={handlePullRefresh}>
       {(scroll) => showingPrize ? (
         <FlatList
-          {...scroll}
+          {...withScanFab(scroll)}
           key={`prize-${numColumns}`}
           data={[{ id: 'prize' }]}
           keyExtractor={(i) => i.id}
@@ -466,13 +581,15 @@ export default function POSScreen() {
           columnWrapperStyle={styles.gridRow}
           renderItem={() => (
             <View style={[styles.tileWrapper, { maxWidth: tileWidth, height: tileHeight }]}>
-              <PrizeTile onPress={() => router.push('/modals/prize-select')} />
+              <TourTarget id="prize-tile" style={{ flex: 1 }}>
+                <PrizeTile onPress={() => router.push('/modals/prize-select')} />
+              </TourTarget>
             </View>
           )}
         />
       ) : showingBundles ? (
         <FlatList
-          {...scroll}
+          {...withScanFab(scroll)}
           key={`bundles-${numColumns}`}
           data={pickBundles}
           keyExtractor={(b) => String(b.id)}
@@ -497,7 +614,7 @@ export default function POSScreen() {
         />
       ) : (
         <FlatList
-          {...scroll}
+          {...withScanFab(scroll)}
           key={numColumns}
           data={visibleProducts}
           keyExtractor={(p) => String(p.id)}
@@ -505,8 +622,8 @@ export default function POSScreen() {
           style={styles.grid_list}
           contentContainerStyle={styles.grid}
           columnWrapperStyle={styles.gridRow}
-          renderItem={({ item }) => (
-            <View style={[styles.tileWrapper, { maxWidth: tileWidth, height: tileHeight }]}>
+          renderItem={({ item, index }) => {
+            const tile = (
               <ProductTile
                 id={item.id}
                 name={item.name}
@@ -521,8 +638,13 @@ export default function POSScreen() {
                 onMinus={item.has_variants ? undefined : () => decrementItem(item.id)}
                 onRemove={() => removeItem(item.id)}
               />
-            </View>
-          )}
+            );
+            return (
+              <View style={[styles.tileWrapper, { maxWidth: tileWidth, height: tileHeight }]}>
+                {index === 0 ? <TourTarget id="tile" style={{ flex: 1 }}>{tile}</TourTarget> : tile}
+              </View>
+            );
+          }}
           ListEmptyComponent={
             <Text style={styles.empty}>
               {products.length === 0
@@ -534,17 +656,27 @@ export default function POSScreen() {
       )}
       </PullToRefresh>
       </View>
+      </TourTarget>
+      <ScanFab collapsed={scanFabCollapsed} onPress={() => router.push('/modals/photo-scan')} />
     </View>
   );
 
-  // Header actions, shared by the inline icon row (wide) and the drawer (compact).
-  const menuItems: HeaderMenuItem[] = [
-    { icon: mode === 'dark' ? 'sunny-outline' : 'moon-outline', label: mode === 'dark' ? 'Light mode' : 'Dark mode', onPress: toggle },
-    { icon: 'nutrition-outline', label: 'Free taste', onPress: () => router.push('/modals/free-taste') },
-    { icon: 'gift-outline', label: 'Bundle', onPress: () => router.push('/modals/bundle') },
-    { icon: 'cube-outline', label: 'Products', onPress: () => router.push('/modals/products') },
-    { icon: 'receipt-outline', label: 'Transactions', onPress: () => router.push('/modals/transactions') },
-    { icon: 'settings-outline', label: 'Settings', onPress: () => router.push({ pathname: '/modals/admin', params: { action: 'settings' } }) },
+  // Header actions: the single source for the inline icon row (wide) and the drawer (compact).
+  const headerActions: HeaderMenuItem[] = [
+    {
+      key: 'theme',
+      icon: mode === 'dark' ? 'sunny-outline' : 'moon-outline',
+      label: mode === 'dark' ? 'Light mode' : 'Dark mode',
+      accessibilityLabel: mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
+      onPress: toggle,
+    },
+    { key: 'free-taste', icon: 'nutrition-outline', label: 'Free taste', onPress: () => router.push('/modals/free-taste') },
+    { key: 'bundle', icon: 'gift-outline', label: 'Bundle', onPress: () => router.push('/modals/bundle') },
+    { key: 'products', icon: 'cube-outline', label: 'Products', onPress: () => router.push('/modals/products') },
+    { key: 'transactions', icon: 'receipt-outline', label: 'Transactions', onPress: () => router.push('/modals/transactions') },
+    { key: 'playbook', icon: 'book-outline', label: 'Playbook', onPress: () => router.push('/modals/playbook') },
+    { key: 'tutorial', icon: 'help-circle-outline', label: 'Tutorial', onPress: startTour },
+    { key: 'settings', icon: 'settings-outline', label: 'Settings', onPress: () => router.push({ pathname: '/modals/admin', params: { action: 'settings' } }) },
   ];
 
   return (
@@ -553,8 +685,12 @@ export default function POSScreen() {
         <View style={styles.headerLeft}>
           <Text style={styles.brandName}>Zoomy</Text>
           <View style={styles.syncRow}>
-            <SyncStatusBar />
-            <EventBadge event={activeEvent} onPress={() => router.push('/modals/event-setup')} />
+            <TourTarget id="sync">
+              <SyncStatusBar />
+            </TourTarget>
+            <TourTarget id="event">
+              <EventBadge event={activeEvent} onPress={() => router.push('/modals/event-setup')} />
+            </TourTarget>
           </View>
         </View>
         <View style={styles.headerActions}>
@@ -569,34 +705,24 @@ export default function POSScreen() {
                 <Ionicons name="scan-outline" size={20} color={colors.textPrimary} />
               </TouchableOpacity>
               */}
-              <TouchableOpacity onPress={toggle} style={styles.headerBtn} accessibilityLabel={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-                <Ionicons name={mode === 'dark' ? 'sunny-outline' : 'moon-outline'} size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push('/modals/free-taste')} style={styles.headerBtn} accessibilityLabel="Free taste">
-                <Ionicons name="nutrition-outline" size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push('/modals/bundle')} style={styles.headerBtn} accessibilityLabel="Bundle">
-                <Ionicons name="gift-outline" size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push('/modals/products')} style={styles.headerBtn} accessibilityLabel="Products">
-                <Ionicons name="cube-outline" size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push('/modals/transactions')} style={styles.headerBtn} accessibilityLabel="Transactions">
-                <Ionicons name="receipt-outline" size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => router.push({ pathname: '/modals/admin', params: { action: 'settings' } })}
-                style={styles.headerBtn}
-                accessibilityLabel="Settings"
-              >
-                <Ionicons name="settings-outline" size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
+              {headerActions.map((a) => (
+                <TourTarget key={a.key} id={`header-action-${a.key}`}>
+                  <TouchableOpacity
+                    testID={`header-action-${a.key}`}
+                    onPress={a.onPress}
+                    style={styles.headerBtn}
+                    accessibilityLabel={a.accessibilityLabel ?? a.label}
+                  >
+                    <Ionicons name={a.icon} size={20} color={colors.textPrimary} />
+                  </TouchableOpacity>
+                </TourTarget>
+              ))}
             </>
           )}
         </View>
       </View>
 
-      <HeaderMenuDrawer visible={menuOpen} onClose={() => setMenuOpen(false)} items={menuItems} />
+      <HeaderMenuDrawer visible={menuOpen} onClose={() => setMenuOpen(false)} items={headerActions} />
       <FreeTasteQuickSheet product={freeTasteProduct} onClose={() => setFreeTasteProduct(null)} />
 
       {useSideCart ? (
@@ -626,6 +752,7 @@ export default function POSScreen() {
             onPetTypeChange={setPetType}
             onCharge={handleRequestPay}
             canIncrement={canIncrementItem}
+            tourExpanded={!!tourScene?.cartExpanded}
           />
         </View>
       )}
@@ -696,7 +823,7 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   },
   gridArea: { flex: 1 },
   grid_list: { flex: 1 },
-  grid: { padding: 12, paddingBottom: 24 },
+  grid: { padding: 12, paddingBottom: 24 + SCAN_FAB_CLEARANCE },
   gridRow: { gap: 8, marginBottom: 8 },
   tileWrapper: { flex: 1 },
 

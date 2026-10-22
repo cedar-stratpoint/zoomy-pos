@@ -3,6 +3,7 @@ import { View, Text, TextInput, ScrollView, TouchableOpacity, SafeAreaView, Styl
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { F, R, type Palette } from '../../constants/theme';
+import { TourTarget } from '../../components/tour/TourTarget';
 import { useTheme } from '../../context/ThemeContext';
 import { useToast } from '../../components/Toast';
 import {
@@ -16,6 +17,7 @@ import {
 } from '../../db/events';
 import { newEventId } from '../../utils/events-sync';
 import { drainOutbox } from '../../utils/outbox';
+import { PRESS_OPACITY_PRIMARY } from '../../constants/motion';
 
 /**
  * Event setup sheet (opened from the header event chip). One full form for both
@@ -211,6 +213,7 @@ export default function EventSetupModal() {
           </View>
         </View>
 
+        <TourTarget id="event-cash">
         <Text style={styles.fieldLabel}>Opening cash float</Text>
         <View style={styles.amountWrap}>
           <Text style={styles.peso}>₱</Text>
@@ -224,6 +227,7 @@ export default function EventSetupModal() {
             keyboardType="numeric"
           />
         </View>
+        </TourTarget>
 
         <Text style={styles.fieldLabel}>Cash note <Text style={styles.optional}>optional</Text></Text>
         <TextInput
@@ -236,6 +240,7 @@ export default function EventSetupModal() {
 
         {!creating && (
           <>
+            <TourTarget id="event-closing">
             <Text style={styles.fieldLabel}>Counted at close <Text style={styles.optional}>optional</Text></Text>
             <Text style={styles.hint}>Count the drawer at end of day.</Text>
             <View style={styles.amountWrap}>
@@ -250,19 +255,20 @@ export default function EventSetupModal() {
                 keyboardType="numeric"
               />
             </View>
+            </TourTarget>
           </>
         )}
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={save} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={save} activeOpacity={PRESS_OPACITY_PRIMARY}>
           <Text style={styles.primaryBtnText}>{creating ? 'Create event' : 'Save changes'}</Text>
         </TouchableOpacity>
 
         {creating && active ? (
-          <TouchableOpacity style={styles.secondaryBtn} onPress={cancelCreate} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={cancelCreate} activeOpacity={PRESS_OPACITY_PRIMARY}>
             <Text style={styles.secondaryBtnText}>Cancel</Text>
           </TouchableOpacity>
         ) : !creating ? (
-          <TouchableOpacity style={styles.secondaryBtn} onPress={startCreate} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={startCreate} activeOpacity={PRESS_OPACITY_PRIMARY}>
             <Text style={styles.secondaryBtnText}>Schedule another event</Text>
           </TouchableOpacity>
         ) : null}

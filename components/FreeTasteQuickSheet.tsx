@@ -4,10 +4,13 @@ import * as Crypto from 'expo-crypto';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from './Toast';
+import { useDemoGuard } from './tour/useDemoGuard';
+import { TourTarget } from './tour/TourTarget';
 import { decrementStock, type Product } from '../db/products';
 import { insertFreeTaste, markFreeTasteSynced, type FreeTaste } from '../db/free-tastes';
 import { pushFreeTaste } from '../utils/free-tastes-sync';
 import { refreshPendingCount } from '../utils/outbox';
+import { PRESS_OPACITY, PRESS_OPACITY_PRIMARY } from '../constants/motion';
 
 /**
  * Single-product free-taste quick sheet, opened by long-pressing a product tile.
@@ -19,6 +22,7 @@ export function FreeTasteQuickSheet({ product, onClose }: { product: Product | n
   const { colors } = useTheme();
   const s = useMemo(() => makeStyles(colors), [colors]);
   const { showToast } = useToast();
+  const blockedByDemo = useDemoGuard();
   const [qty, setQty] = useState(1);
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -35,7 +39,7 @@ export function FreeTasteQuickSheet({ product, onClose }: { product: Product | n
   const p = product;
 
   async function submit() {
-    if (submitting || qty <= 0) return;
+    if (submitting || qty <= 0 || blockedByDemo()) return;
     setSubmitting(true);
     const row: FreeTaste = {
       client_uuid: Crypto.randomUUID(),
@@ -98,6 +102,7 @@ export function FreeTasteQuickSheet({ product, onClose }: { product: Product | n
           <Text style={s.hint}>Opens sellable stock for pets to sample. Deducts event stock, no sale is made.</Text>
           {!p.sku && <Text style={s.warn}>Not synced to Coop yet. It will sync once the catalog lands.</Text>}
 
+          <TourTarget id="quick-qty">
           <View style={s.qtyRow}>
             <Text style={s.qtyLabel}>Packs opened</Text>
             <View style={s.stepper}>
@@ -110,6 +115,7 @@ export function FreeTasteQuickSheet({ product, onClose }: { product: Product | n
               </TouchableOpacity>
             </View>
           </View>
+          </TourTarget>
 
           <TextInput
             style={s.input}
@@ -119,14 +125,16 @@ export function FreeTasteQuickSheet({ product, onClose }: { product: Product | n
             onChangeText={setNote}
           />
 
+          <TourTarget id="quick-actions">
           <View style={s.actions}>
-            <TouchableOpacity style={s.cancelBtn} onPress={onClose} activeOpacity={0.7}>
+            <TouchableOpacity style={s.cancelBtn} onPress={onClose} activeOpacity={PRESS_OPACITY}>
               <Text style={s.cancelText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[s.primaryBtn, submitting && s.primaryDisabled]} onPress={submit} disabled={submitting} activeOpacity={0.85}>
+            <TouchableOpacity style={[s.primaryBtn, submitting && s.primaryDisabled]} onPress={submit} disabled={submitting} activeOpacity={PRESS_OPACITY_PRIMARY}>
               <Text style={s.primaryText}>{submitting ? 'Recording…' : `Log free taste`}</Text>
             </TouchableOpacity>
           </View>
+          </TourTarget>
         </Pressable>
       </Pressable>
     </Modal>

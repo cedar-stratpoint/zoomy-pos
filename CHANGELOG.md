@@ -12,6 +12,297 @@ Dates are local working dates (GMT+8). Newest first.
 
 ---
 
+## 2026-10-21 — Photo scan: confirmed scans kept as training samples (staging) — `feat(scan)`
+
+Every photo scan the cashier confirms with **Add to sale** is now saved: the photo
+the scanner read, what the scanner said, and what the cashier actually added
+(`utils/photo-scan/training-sample.ts`, `save-training-sample.ts`). It is written to
+a local `scan_samples` table first, linked to its sale at checkout, and uploaded by
+the outbox after every Coop write (`utils/scan-samples-sync.ts`). The upload puts the
+photo in the private `pos-scan-samples` bucket and the row in `pos_scan_samples`
+through `record_pos_scan_sample` (`supabase/scan_samples_2026-10-21.sql`, applied
+to Staging). No UI change for the cashier.
+
+**Decisions.**
+- **The 1500px JPEG the scanner read, not the camera original.** It is exactly
+  what the model saw, about 300 to 500 KB, and pack boxes refer to it.
+- **Confirmed scans only.** Each sample carries a human-checked label. Cancelled
+  scans are not kept.
+- **Label = counts per SKU, not boxes.** The scanner only returns boxes for unsure
+  packs, so a detector will need boxes drawn later. `edited` marks samples where
+  the cashier changed anything, including picking other than the top guess for an
+  unsure pack. Shape versioned by `label_version`.
+- **Private, write-only from the POS.** anon can insert a photo at
+  `YYYY-MM/<uuid>.jpg` and call the RPC. It cannot read, replace or delete either.
+  Cashiers are told to frame only the products, since a photo may catch hands.
+- **Never in the way of a sale.** Saving and linking are best-effort. The upload
+  runs after sales, free tastes and prizes, and stays out of the "N pending" count.
+  The local photo is deleted once Coop has the row.
+- **Web keeps the photo in the row.** On web the scanned photo is a blob URL that
+  dies on reload, so the base64 JPEG sent to the scanner is stored in
+  `scan_samples.photo_base64` (the web database persists in OPFS). Native keeps a
+  file in the document dir. Both are cleared once Coop has the sample.
+- `scan-products` now returns `model`, stored with each sample. It needs a
+  redeploy; until then samples record `model: null`.
+
+---
+
+## 2026-10-21 — Photo scan: bundles are no longer preselected — `feat(scan)`
+
+The review sheet still lists every bundle the scanned packs could fill, but every
+count now starts at 0. The cashier taps + on the bundles the customer asks for.
+
+**Decision.** The auto-picked "cheapest saving mix" was often not what the customer
+wanted, so cashiers spent taps undoing it. Starting from nothing makes the sheet show
+what is available and leaves the choice to the cashier. If a quantity edit leaves the
+chosen counts unfillable, the sheet now drops back to all singles (there is no
+suggestion to fall back to). `suggestBundleCounts` and its search helpers were removed
+from `utils/photo-scan/apply-bundles.ts` as they had no other callers.
+
+---
+
+## 2026-10-14 — Photo scan to cart with Claude, bundles auto-applied (staging) — `feat(scan)`
+
+New **Scan products** bar above the category pills (`components/ScanProductsBar.tsx`,
+opening `app/modals/photo-scan.tsx`). The cashier takes
+a photo of the packs or uploads one; Claude reads which catalog products are in it
+and how many; the review sheet (`components/PhotoScanResultsSheet.tsx`) lets the
+cashier fix quantities, then adds everything to the sale. Payment is still confirmed
+by hand, as before.
+
+**Decisions.**
+- **Claude Haiku 5.5 through a new `scan-products` edge function**, not an on-device
+  model. The Anthropic key is the function secret `POS_ANTHROPIC_API_KEY` and never
+  ships in the app bundle. Haiku was chosen for speed and cost (~4 to 7 s per scan on
+  staging, including cold start); the cashier review screen catches misreads.
+- **The catalog is read server-side** (active `pos_products`), and structured output
+  limits Claude's answer to an enum of those SKUs. The client sends only the image, so
+  no client text reaches the prompt and Claude cannot invent a product.
+- **Matching is by SKU** (`products.sku`), not by name, so it fits the flat SKU
+  catalog. Unknown SKUs and unpriced products are dropped and counted in a note.
+- **The cashier sets how many of each bundle; the cheapest saving mix is preselected.**
+  Customers can take several bundles at once (Buy Any 4 twice, or Buy Any 4 plus
+  Buy Any 2), so each active "pick any N" bundle gets a stepper in the review sheet.
+  `utils/photo-scan/apply-bundles.ts` fills the chosen counts with the most expensive
+  eligible packs (`planBundles`), and + is disabled once the packs cannot fill another.
+  `suggestBundleCounts` starts the sheet on the cheapest mix that beats paying for every
+  pack as a single (ties prefer fewer bundles); if a quantity edit leaves the chosen
+  counts unfillable, the sheet drops back to that suggestion. A running line shows
+  "Bundles save ₱X" or "cost ₱X more".
+  This replaced, the same day, first an auto-apply on/off switch and then a pick-one
+  list. On staging the misconfigured "QA Buy Any 2" (pick 3 at ₱350) always undercut
+  "Buy Any 4", so the auto-picked bundle was never the one cashiers expected; neither
+  earlier version let a customer take more than one kind of bundle.
+- **Only bundles the packs can fill are listed** (2026-10-19). Showing every active
+  bundle, with unfillable ones greyed out and a "Needs 4 eligible packs" reason, read
+  as confusing at the counter. A bundle is listed when the scanned packs could fill it
+  on its own, judged per bundle and not against the current mix, so rows do not appear
+  and disappear while the cashier taps; + is still disabled once its packs are used.
+- **Scan products is a floating button that shrinks while the grid scrolls** (2026-10-21,
+  option C of four mocked up; replaces the full-width scan bar, whose component is
+  removed). `components/ScanFab.tsx` sits over the product grid's bottom-right corner,
+  just above the cart bar (and inside the product pane in landscape). At rest it reads
+  "Scan" so cashiers learn it (screen readers hear "Scan products"); once the grid scrolls past 24px the label tucks
+  away and it becomes a round camera button, so it hides less of the tiles; it returns
+  when the grid is back at the top or the category changes. The grid gets 72px of extra
+  bottom padding so the last row scrolls clear of it; tile sizing ignores that padding.
+  The morph is 180ms ease-out (`DURATION.fabMorph`), animating width on the JS thread
+  because it changes layout; with Reduce Motion it switches instantly. Screen readers
+  always hear "Scan products". Chosen over a short "Scan" pill (A), an icon-only button
+  (B) and a button docked on the cart bar (D, which displaced its drag handle).
+- **Unsure packs are asked about, not dropped** (2026-10-20, design A of four mocked up).
+  `scan-products` (v4 on staging) now returns every pack in one of two lists: `items` when
+  Claude is sure, `unsure` when it is not, with its 2 or 3 likeliest SKUs (most likely
+  first), a quantity and the pack's box on a 0 to 1000 grid. The POS cuts the pack out of
+  the scanned photo (`utils/photo-scan/crop.ts`, from the 1500px copy Claude saw, so the
+  box lines up) and shows `components/UnsurePackCard.tsx` at the top of the review: "1 pack
+  needs a check", the crop, the guesses (likeliest outlined), "Something else" (a searchable
+  list of every sellable product, `components/ProductPicker.tsx`) and "Not a pack, skip".
+  **Add to sale stays disabled until every unsure pack is answered**, so a pack cannot slip
+  into the sale unchecked; the answer joins that product's line. Picked over a best guess
+  the cashier could accept by accident (B), markers on the photo that depend on precise
+  boxes (C) and a separate question step (D). A new amber "needs attention" token
+  (`amber`, `amberDim`, `amberSubtle`) was added to both themes for it. Tested on staging:
+  a blurred Super Duo Bites pack came back unsure with all three Super Duo flavors, the
+  right one first, and an accurate box; a sharp Beef Liver pack came back sure.
+- **Scanning shows a progress bar and what it is doing** (2026-10-19,
+  `components/ScanProgress.tsx`). Three real steps replace the bare spinner: preparing
+  the photo, reading the packs (the Claude call), then matching products and bundles,
+  each with "Step N of 3", a label and a one-line detail. Claude reports no progress
+  while it reads, so that step eases toward 90% over about 9 seconds and holds: the bar
+  never claims to be finished before the answer arrives. Only `transform` animates;
+  with Reduce Motion on, the bar jumps between steps instead of easing.
+- **The whole scanned photo can be opened** (2026-10-19). The review sheet's preview is
+  cropped to a 180px strip, so a "View photo" tag opens it full screen, uncropped, to
+  check the scan against every pack in the shot.
+- **Reference photos (2026-10-16).** `scan-products` (v3 on staging) sends a front-of-pack
+  photo for each product that has one, from the private Storage bucket
+  `product-references` (`<SKU>.jpg`, 400px JPEG at 80%, about 25 KB each; 17 of 29 active
+  products so far). They come first in the prompt, sorted by SKU, followed by the
+  instructions and catalog and a 1-hour `cache_control` marker; the customer's photo comes
+  last. Measured on the 5-pack test photo: the first scan writes 6,570 tokens to the
+  cache, later scans read them (about 1,960 uncached input tokens each), and both runs
+  found all 5 packs, including the unlabeled Cat Grass pack an earlier version missed once.
+  The 1-hour cache was chosen over the 5-minute default because bazaar scans can be
+  minutes apart. If the photos cannot be loaded, the scan carries on by name.
+  Each scan logs its token usage (`scan-products: usage`) so cost can be tracked.
+- **The old YOLO scanner is kept, untouched and still hidden** (`app/modals/scan.tsx`,
+  `utils/scan-to-cart/`). The new feature lives beside it in `utils/photo-scan/`.
+- Photos are resized to 1500px JPEG before upload (`expo-image-manipulator`, new
+  dependency). Works on web and native; no "mobile web only" restriction.
+- **Take photo opens a live viewfinder** (`expo-camera` `CameraView`, already a
+  dependency) instead of `ImagePicker.launchCameraAsync`. On desktop browsers the
+  picker ignores the camera hint and just opens the file dialog, so both buttons
+  ended up as upload. Upload still uses `expo-image-picker`.
+- **Scan sits in a full-width bar above the category pills, not in the header menu.**
+  On phones the header collapses into a menu, which hid the feature. Four placements
+  were mocked up (header button, scan bar, cart-bar button, floating button); the bar
+  won "for now" because it is the most visible and its subtitle teaches the feature
+  while it is new. It costs about 70px of grid height. The likely later move is the
+  cart-bar button: Scan as the main action while the sale is empty.
+- Cart writes go through `useDemoGuard`, so the tutorial tour cannot add a scan.
+
+**Staging only.** `scan-products` is deployed to Staging (v2: v1 used `minimum` on an
+integer, which structured outputs reject). Not deployed to prod. Note: the staging
+bundle "QA Buy Any 2" has `pick_count: 3`; fix it in Coop before testing the 2-pick path.
+
+**Known limit.** When Claude cannot identify a pack it leaves it out rather than
+guess, so that pack is missing from the list rather than flagged. The cashier sees the
+photo on the review screen and adds it manually.
+
+---
+
+## 2026-10-13 — Motion polish: shared Sheet, motion tokens, reduced motion — `feat(motion)`
+
+A motion audit of POS + Coop (`design-motion-principles` skill, Emil primary /
+Jakub secondary) found the high-frequency taps already right (instant, opacity
+dip only) but the surfaces around them unfinished. The user picked which
+findings to fix; this is the POS half.
+
+**Decisions.**
+- **Shared `Sheet`** (`components/Sheet.tsx`) replaces `<Modal animationType="slide">`,
+  which slides the whole modal so the dim layer rode up with the panel. The
+  backdrop now fades in place, only the panel travels, and the sheet stays
+  mounted through its exit while holding the last open content (callers clear
+  `selected` / `editingTx` as they close). Used by the variant picker, the
+  transaction detail sheet and Edit sale. Nested Modals inside those sheets
+  stay nested, so their behavior is unchanged.
+- **Header menu drops from the top** (`<Sheet from="top">`) instead of fading
+  in place, matching where the panel lives.
+- **Motion tokens** in `constants/motion.ts`: `EASE_OUT` (0.23,1,0.32,1) for
+  small UI, `EASE_SHEET` (iOS 0.32,0.72,0,1) for travelling surfaces, and the
+  durations. Core `Animated.timing` defaults to ease-in-out, which made the cart
+  sheet start slow; it now runs 240ms in / 200ms out on the sheet curve.
+- **Toast**: exit is opacity-only and quicker (140ms) than the 180ms enter, and
+  a toast that replaces another ("Sale recorded" then "Not synced to Coop")
+  fades the old one out first instead of hard-cutting.
+- **Reduced motion**: new `useReducedMotion()` hook (live, so toggling the OS
+  setting mid-shift applies). Sheets and the menu fade instead of sliding, the
+  toast drops its 16px travel, the cart sheet jumps to place (a drag still
+  follows the finger). TourOverlay now uses the same hook.
+- **Press feedback**: the five `activeOpacity` literals become `PRESS_OPACITY`
+  (0.7) and `PRESS_OPACITY_PRIMARY` (0.85, large solid buttons). The
+  `activeOpacity={1}` backdrops are intentional and unchanged.
+- **Kept as is (user call):** product tiles and steppers stay un-animated.
+
+Verified: typecheck, 383 tests (3 new for `Sheet`), and in the browser at phone
+width with and without `prefers-reduced-motion`.
+
+## 2026-10-09 — Transactions loads in one request; capped pull no longer prunes old sales — `fix(transactions)`
+
+A seller at an Oct 8 event reported Transactions sitting on its spinner. Coop's
+logs showed every query finishing in under 0.5 s at origin, so the database was
+not the cause. The screen made 4 to 6 sequential round trips per load, three of
+them carrying all 500 order ids in a ~20 KB `in.(...)` query string, and the
+whole chain ran twice in parallel (focus plus pull-to-refresh). On venue LTE
+that came to about 8 s.
+
+**Decisions.**
+- `fetchRemoteOrders` is now one PostgREST embedded read: `pos_orders` with
+  `pos_order_items(pos_products(name))` and non-voided `pos_order_prizes`. The
+  request URL drops from ~20 KB to ~350 bytes. 500 parents stay under the
+  1000-row cap and embedded rows are not capped, so no paging is needed.
+  Trade-off accepted: a prize read failure now fails the whole pull (the screen
+  falls back to the local list) instead of only hiding prize badges. Both
+  Staging and prod have `pos_order_prizes`.
+- The pull aborts after 15 s so a stalled connection cannot hold the spinner
+  open; the local list stays on screen.
+- Focus and pull-to-refresh share one in-flight load. Edit-save and import pass
+  `fresh` so they wait out a running load and then read again.
+- **Bug fixed along the way:** the pull is capped at the newest 500 orders, and
+  prod passed 500. The deletion-prune treated any synced local sale absent from
+  that capped list as "deleted on Coop" and removed it from the device, taking
+  its local-only detail (cash tendered, proof photo) with it. The pull now
+  reports `windowStart`, and `transactionsToPrune` only considers sales strictly
+  newer than it. Sales already pruned this way are still on Coop and still show
+  as remote rows when inside the window; their local-only detail is not
+  recoverable.
+
+Reviewed for regressions before merge (output equivalence, RLS, FK ambiguity,
+row caps, dedupe races). 380 tests pass.
+
+---
+
+## 2026-10-05 — Playbook rewritten in Taglish, simpler layout — `feat(playbook)` `fix(tour)`
+
+Replaced the translated English playbook with the seller's own Booth Playbook
+script, and cut the screen down to what a seller needs mid-conversation.
+
+**Decisions.** Content is the original Taglish, because that is how sellers
+actually talk to customers. The Flow tab is one numbered list of eight steps;
+chips remain only where the paths exclude each other (pet check, and
+small/puppy/big recommendation). The Record a free taste shortcut stays, only
+on "May dalang pet". The Products tab gets a **Quick product guide** (customer
+to product lookup) above one card per product, and the Small/Big/Cats filter
+and per-step hint lines are gone (six cards are short enough to scan). Content
+moved to a block model (`actions` / `say` / `heading`) in `constants/playbook.ts`.
+Em and en dashes in the source script were rewritten to commas, per the copy
+rule the test enforces.
+
+**Freeze dried expiry** now reads "30 days from now" with the source's reminder
+to check the package, reversing the earlier "Check the batch label" choice. It
+goes stale, so re-check it when `PLAYBOOK_AS_OF` is bumped.
+
+**Tour.** The `playbook-filters` step became `playbook-guide` (spotlights the
+quick guide), and the `playbook-step` copy now mentions chips.
+
+---
+
+## 2026-10-04 — Sales Playbook screen and guided Tutorial tour — `feat(playbook)` `feat(tour)`
+
+Two new header actions: **Playbook** (booth script and product facts) and
+**Tutorial** (a spotlight tour of the whole register).
+
+**Playbook.** `app/modals/playbook.tsx` with Flow and Products tabs. The Flow tab
+is the real sequence a seller follows (greet, pet check, recommend by size, say
+the price, payment, after payment) with branch chips for the paths that
+exclude each other and "Say this" blocks for spoken lines. Content is English,
+static, in `constants/playbook.ts` (offline, no sync), and a test fails if any
+string contains an em or en dash. Expiry: freeze dried says "Check the batch
+label" (the source said "30 days from now", which goes stale); meaty treats is
+a dated value with a `PLAYBOOK_AS_OF` marker. "Note cat, dog or both" points to
+the existing Dog/Cat/Both chips in the cart, so no new order field.
+
+**Tutorial tour.** `context/TourContext.tsx` drives the real app: each step
+names a route, a target and a declarative *scene* (which sheet is open, which
+pill is selected, which tab). Screens apply the scene they own, so a step never
+has to undo the previous one. Targets are `TourTarget` wrappers measured with
+`measureInWindow`; a target that never appears skips its step instead of
+sticking. The overlay is a transparent `Modal` re-presented per scene so it
+stays above native modals, with core `Animated` only (no new dependency).
+Admin Settings, Change PIN, Payment Options and QR codes are excluded.
+
+**Decision: the tour cannot write.** The overlay blocks all touches, so a user
+cannot press a write button mid-tour. Instead of guarding every write handler,
+only the money and stock paths (confirm payment, free taste submit and undo)
+carry a `useDemoGuard()` as defense in depth. The cart holds one in-memory demo
+line while the tour runs and clears it on exit; nothing is persisted.
+`tour_seen` (settings table, `utils/tour-preference.ts`) offers the tour once on
+a fresh install, and the Tutorial button always replays it.
+
+**Refactor.** The header's destinations were written out twice (inline icons
+and the compact drawer). They are now one `headerActions` list, and the drawer
+rows and inline buttons register the same tour targets.
 ## 2026-10-09 — Transactions loads in one request; capped pull no longer prunes old sales — `fix(transactions)`
 
 A seller at an Oct 8 event reported Transactions sitting on its spinner. Coop's

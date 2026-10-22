@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, TextInput, FlatList, TouchableOpacity, SafeAreaView, StyleSheet,
 } from 'react-native';
@@ -7,7 +7,10 @@ import { router } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import { F, R, type Palette } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
+import { TourTarget, MaybeTourTarget } from '../../components/tour/TourTarget';
+import { useTourScene } from '../../context/TourContext';
 import { useToast } from '../../components/Toast';
+import { useDemoGuard } from '../../components/tour/useDemoGuard';
 import { CategoryTabs } from '../../components/CategoryTabs';
 import { SubcategoryFilter } from '../../components/SubcategoryFilter';
 import {
@@ -25,6 +28,7 @@ import {
 } from '../../utils/catalog-filter';
 import { formatRelativeTime } from '../../utils/format-relative-time';
 import { refreshPendingCount } from '../../utils/outbox';
+import { PRESS_OPACITY, PRESS_OPACITY_PRIMARY } from '../../constants/motion';
 
 type Selection = { category: string | null; subcategory: string | null };
 
@@ -43,6 +47,8 @@ export default function FreeTasteModal() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { showToast } = useToast();
+  const blockedByDemo = useDemoGuard();
+  const tourScene = useTourScene();
 
   const [mode, setMode] = useState<'record' | 'recent'>('record');
   const [products, setProducts] = useState<Product[]>([]);
@@ -119,6 +125,14 @@ export default function FreeTasteModal() {
     loadRecents().catch(() => {});
   }
 
+  // Guided tour: switch tabs on request.
+  useEffect(() => {
+    if (tourScene?.freeTasteTab === 'recent') showRecent();
+    else if (tourScene?.freeTasteTab === 'record') setMode('record');
+    // showRecent only reads state setters and a stable loader.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tourScene]);
+
   const filtered = useMemo(() => {
     const base = filterProducts(products, sel.category, sel.subcategory);
     const q = search.trim().toLowerCase();
@@ -145,7 +159,7 @@ export default function FreeTasteModal() {
     });
 
   async function submit() {
-    if (submitting || totalPacks === 0) return;
+    if (submitting || totalPacks === 0 || blockedByDemo()) return;
     setSubmitting(true);
     const lines = products.filter((p) => (qty[p.id] ?? 0) > 0);
     const batchId = Crypto.randomUUID();
@@ -228,7 +242,7 @@ export default function FreeTasteModal() {
   // The synchronous ref guard + delete keep it idempotent (a double-tap can't
   // double-restore).
   async function undo(row: FreeTaste) {
-    if (undoingRef.current.has(row.client_uuid)) return;
+    if (undoingRef.current.has(row.client_uuid) || blockedByDemo()) return;
     undoingRef.current.add(row.client_uuid);
     setUndoing(new Set(undoingRef.current));
     try {
@@ -303,12 +317,13 @@ export default function FreeTasteModal() {
   }
 
   const tabs = (
+    <TourTarget id="ft-tabs">
     <View style={styles.tabsRow}>
       <TouchableOpacity
         testID="free-taste-tab-record"
         style={[styles.tab, mode === 'record' && styles.tabActive]}
         onPress={() => setMode('record')}
-        activeOpacity={0.7}
+        activeOpacity={PRESS_OPACITY}
       >
         <Text style={[styles.tabLabel, mode === 'record' && styles.tabLabelActive]}>Record</Text>
       </TouchableOpacity>
@@ -316,11 +331,12 @@ export default function FreeTasteModal() {
         testID="free-taste-tab-recent"
         style={[styles.tab, mode === 'recent' && styles.tabActive]}
         onPress={showRecent}
-        activeOpacity={0.7}
+        activeOpacity={PRESS_OPACITY}
       >
         <Text style={[styles.tabLabel, mode === 'recent' && styles.tabLabelActive]}>Recent</Text>
       </TouchableOpacity>
     </View>
+    </TourTarget>
   );
 
   if (mode === 'recent') {
@@ -332,11 +348,13 @@ export default function FreeTasteModal() {
           keyExtractor={(r) => r.client_uuid}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
-            <Text style={styles.hint}>
-              Undo a logged free taste to restore its packs. A synced one is reversed on Coop, which needs a connection.
-            </Text>
+            <TourTarget id="ft-recent-hint">
+              <Text style={styles.hint}>
+                Undo a logged free taste to restore its packs. A synced one is reversed on Coop, which needs a connection.
+              </Text>
+            </TourTarget>
           }
-          renderItem={({ item }) => {
+          renderItem={({ item, index }) => {
             const synced = !!item.synced_at;
             const busy = undoing.has(item.client_uuid);
             return (
@@ -352,15 +370,17 @@ export default function FreeTasteModal() {
                     {synced ? 'Synced' : 'Pending'}
                   </Text>
                 </View>
+                <MaybeTourTarget id={index === 0 ? 'ft-undo' : undefined}>
                 <TouchableOpacity
                   testID={`free-taste-undo-${item.client_uuid}`}
                   style={[styles.undoBtn, busy && styles.undoBtnDisabled]}
                   onPress={() => undo(item)}
                   disabled={busy}
-                  activeOpacity={0.7}
+                  activeOpacity={PRESS_OPACITY}
                 >
                   <Text style={styles.undoText}>{busy ? 'Undoing…' : 'Undo'}</Text>
                 </TouchableOpacity>
+                </MaybeTourTarget>
               </View>
             );
           }}
@@ -386,6 +406,7 @@ export default function FreeTasteModal() {
           value={note}
           onChangeText={setNote}
         />
+        <TourTarget id="ft-search">
         <TextInput
           testID="free-taste-search"
           style={[styles.textInput, styles.search]}
@@ -396,6 +417,7 @@ export default function FreeTasteModal() {
           autoCapitalize="none"
           autoCorrect={false}
         />
+        </TourTarget>
         <CategoryTabs
           categories={categoryNames}
           active={sel.category ?? ''}
@@ -452,6 +474,7 @@ export default function FreeTasteModal() {
         ListEmptyComponent={<Text style={styles.empty}>No treats match that search.</Text>}
       />
 
+      <TourTarget id="ft-footer">
       <View style={styles.footer}>
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Packs opened</Text>
@@ -462,13 +485,14 @@ export default function FreeTasteModal() {
           style={[styles.primaryBtn, (totalPacks === 0 || submitting) && styles.primaryBtnDisabled]}
           onPress={submit}
           disabled={totalPacks === 0 || submitting}
-          activeOpacity={0.85}
+          activeOpacity={PRESS_OPACITY_PRIMARY}
         >
           <Text style={[styles.primaryBtnText, (totalPacks === 0 || submitting) && styles.primaryBtnTextDisabled]}>
             {totalPacks === 0 ? 'Add a pack to record' : `Record ${totalPacks} pack${totalPacks !== 1 ? 's' : ''}`}
           </Text>
         </TouchableOpacity>
       </View>
+      </TourTarget>
     </SafeAreaView>
   );
 }
