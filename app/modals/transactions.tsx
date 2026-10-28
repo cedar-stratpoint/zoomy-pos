@@ -294,12 +294,14 @@ export default function TransactionsModal() {
     // read below fills in prizes logged on other devices / backfilled on Coop.
     const localPrizeUuids = await getOrderClientUuidsWithPrizes().catch(() => [] as string[]);
     setPrizeUuids(new Set(localPrizeUuids));
-    // Scope the Coop pull to a Custom range so a historical window loads in full
-    // (paginated, past the newest-N cap). Preset/live views keep the capped pull.
-    const scopedRange =
-      dateFilterRef.current === 'custom' && customRangeRef.current
-        ? getFilterRange('custom', customRangeRef.current)
-        : null;
+    // Scope the Coop pull to ANY bounded window (Today/Week/Month/Custom) so it
+    // loads in full, paginated past the newest-N cap: a busy day/week/month can
+    // itself exceed the cap (September had 530 orders), which would otherwise
+    // starve the preset the same way a historical Custom range was starved. Only
+    // "All" has no start bound, so it keeps the capped newest-N pull (paginating
+    // all-time over venue LTE is what the cap exists to avoid).
+    const range = getFilterRange(dateFilterRef.current, customRangeRef.current);
+    const scopedRange = range.start ? range : null;
     const remote = await fetchRemoteOrders(scopedRange);
     if (!remote.ok) return;
     remotePrizeUuidsRef.current = remote.prizeClientUuids;

@@ -12,9 +12,9 @@ Dates are local working dates (GMT+8). Newest first.
 
 ---
 
-## 2026-10-28 — Transactions: Custom date range loads the whole window, not the newest 500 — `fix(transactions)`
+## 2026-10-28 — Transactions: every bounded date filter loads its whole window, not the newest 500 — `fix(transactions)`
 
-The Transactions screen under-reported any historical month. Two phones viewing the
+The Transactions screen under-reported any busy window. Two phones viewing the
 same **Custom** range (e.g. "Sep 1 to 30") showed different totals (134 / ₱49,250 vs
 156 / ₱60,860) while the real figures on Coop were **524 completed / ₱214,320**. Root
 cause: the Coop pull (`utils/orders-remote.ts`) always fetched only the **500 newest**
@@ -22,15 +22,20 @@ cause: the Coop pull (`utils/orders-remote.ts`) always fetched only the **500 ne
 back to **Sep 25**; every order older than that loaded only on the one device that
 physically recorded it (local SQLite). Each device therefore showed "the slice still
 inside the 500 window + whatever it rang up locally", and no device could reconstruct
-a full past month.
+a full past window. This bit **Custom** ranges most obviously, but the preset filters
+shared the same latent bug: a single busy month can itself pass 500 orders (September
+had 530), so **Month** viewed late in that month would have shown ~500, not 530.
 
 **Fix.**
-- **Date-scoped pull for Custom ranges.** `fetchRemoteOrders(range?)` now pages the
-  entire `[start, end]` window via `fetchAllPaged` (past PostgREST's 1000-row cap),
-  so a historical range loads in full on every device. The capped newest-500 pull is
-  kept for the live/preset views (Today/Week/Month/All only ever show recent sales).
-  The Transactions screen re-pulls, scoped, whenever the date filter changes
-  (`app/modals/transactions.tsx`).
+- **Date-scoped pull for every bounded filter.** `fetchRemoteOrders(range?)` pages the
+  entire `[start, end]` window via `fetchAllPaged` (past PostgREST's 1000-row cap), so
+  the window loads in full on every device. The screen now scopes the pull for **any
+  filter with a start bound, Today / Week / Month / Custom**, gating on `range.start`
+  rather than on "is Custom" (`app/modals/transactions.tsx`). It re-pulls, scoped,
+  whenever the date filter changes.
+- **"All" keeps the capped newest-500 pull.** It has no start/end to scope to, and
+  paginating all-time over venue LTE is exactly what the cap exists to avoid. A proper
+  "All" fix (load-more on scroll) is a follow-up, not this change.
 - **Prune respects the scoped window.** `transactionsToPrune` gained a `windowEnd`
   upper bound so a date-scoped pull only prunes local rows Coop lacks *inside* the
   covered window, never ones outside it (`utils/merge-transactions.ts`).
@@ -40,13 +45,14 @@ a full past month.
 
 **Scope / notes.**
 - Device screens are reliable for live sales; for historical reporting Coop (the
-  dashboard / DB) remains authoritative. This fix closes the gap for Custom ranges.
-- Not included: a native reconnect / app-foreground outbox drain (a sale still owes
-  Coop a push until the device next launches, ticks the timer, or taps Sync now).
-  Tracked separately.
+  dashboard / DB) remains authoritative. This closes the gap for all bounded filters.
+- Not included: scoping for **All** (needs load-more-on-scroll); and a native reconnect
+  / app-foreground outbox drain (a sale still owes Coop a push until the device next
+  launches, ticks the timer, or taps Sync now). Both tracked separately.
 - Tests: `__tests__/utils/orders-remote.test.ts` (scoped pagination past the cap,
-  window bounds, capped fallback, offline), `merge-transactions.test.ts` (windowEnd
-  prune bounds). Typecheck + pagination guard green.
+  window bounds incl. an end-less preset range, capped "All" fallback, offline),
+  `merge-transactions.test.ts` (windowEnd prune bounds). Typecheck + pagination guard
+  green.
 
 ## 2026-10-21 — Photo scan: confirmed scans kept as training samples (staging) — `feat(scan)`
 
