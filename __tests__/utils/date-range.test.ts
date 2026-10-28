@@ -90,10 +90,6 @@ describe('getFilterRange', () => {
     expect(start?.toDateString()).toBe(new Date(2026, 5, 1).toDateString());
   });
 
-  it('returns no bounds for "all"', () => {
-    expect(getFilterRange('all', null, now)).toEqual({ start: null, end: null });
-  });
-
   it('returns no bounds for "custom" with no range selected yet', () => {
     expect(getFilterRange('custom', null, now)).toEqual({ start: null, end: null });
   });

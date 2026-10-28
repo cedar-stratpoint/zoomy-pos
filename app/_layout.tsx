@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, Text, Pressable } from 'react-native';
+import { View, ActivityIndicator, Text, Pressable, AppState } from 'react-native';
 import { CartProvider } from '../context/CartContext';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { initSchema } from '../db/schema';
@@ -163,20 +163,37 @@ export default function RootLayout() {
     // No-ops instantly when nothing is pending or when offline.
     const drainTimer = setInterval(() => { drainOutbox().catch(() => {}); }, OUTBOX_DRAIN_INTERVAL_MS);
 
-    // Re-pull the catalog AND drain the outbox when connectivity returns (web
-    // PWA). Native falls back to the launch + interval drains.
-    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-      const onOnline = () => {
+    // Drain the moment the app returns to the foreground. A cashier who went
+    // offline, locked the phone, and reopened near Wi-Fi gets pending sales
+    // pushed right away instead of waiting out the next interval tick — the
+    // window where a sale lives only on this one device stays as short as
+    // possible. Fires only on a real background/inactive -> active transition;
+    // drainOutbox is single-flight and a no-op when nothing is pending or still
+    // offline, so an extra foreground event is free.
+    let lastAppState = AppState.currentState;
+    const appStateSub = AppState.addEventListener('change', (next) => {
+      const cameToForeground = next === 'active' && lastAppState !== 'active';
+      lastAppState = next;
+      if (cameToForeground) {
         pullCatalog().catch(() => {});
         drainOutbox().catch(() => {});
-      };
-      window.addEventListener('online', onOnline);
-      return () => {
-        clearInterval(drainTimer);
-        window.removeEventListener('online', onOnline);
-      };
-    }
-    return () => clearInterval(drainTimer);
+      }
+    });
+
+    // Also re-pull and drain when connectivity returns on web (PWA 'online'
+    // event). Native relies on the launch, interval, and foreground drains.
+    const hasWindow = typeof window !== 'undefined' && typeof window.addEventListener === 'function';
+    const onOnline = () => {
+      pullCatalog().catch(() => {});
+      drainOutbox().catch(() => {});
+    };
+    if (hasWindow) window.addEventListener('online', onOnline);
+
+    return () => {
+      clearInterval(drainTimer);
+      appStateSub.remove();
+      if (hasWindow) window.removeEventListener('online', onOnline);
+    };
   }, [bootstrap]);
 
   if (failed) {
