@@ -1,5 +1,6 @@
 import {getSupabase} from '../lib/supabase';
 import {stripLinePrefix} from './catalog-sync';
+import {fetchAllPaged} from './paginate';
 import {reconstructEntries, type EditEntry, type RawOrderLine, type BundleMatch} from './order-entries';
 import type {PaymentMethod, Transaction, TransactionItem} from '../db/transactions';
 
@@ -24,10 +25,15 @@ const MAX_ORDERS = 500; // bound the pull; the list paginates visually anyway
 const FETCH_TIMEOUT_MS = 15_000;
 
 export type RemoteOrdersResult =
-  // `windowStart` is the oldest order in the pull when it hit MAX_ORDERS (so
-  // older Coop orders exist but were not read), else null (the pull is complete).
-  // Callers must not treat a local sale older than it as "deleted on Coop".
-  | {ok: true; orders: Transaction[]; prizeClientUuids: string[]; windowStart: string | null}
+  // The pull's coverage window, so the caller never treats an order outside it as
+  // "deleted on Coop" (see transactionsToPrune):
+  // - `windowStart` is the OLDEST instant covered. For the capped live pull it's
+  //   the oldest order read when it hit MAX_ORDERS (older Coop orders exist but
+  //   weren't read), else null (complete). For a date-scoped pull it's the range
+  //   start (nothing older was requested).
+  // - `windowEnd` is the NEWEST instant covered: null for the live pull (covered
+  //   up to now), or the range end for a date-scoped pull (nothing newer was read).
+  | {ok: true; orders: Transaction[]; prizeClientUuids: string[]; windowStart: string | null; windowEnd: string | null}
   | {ok: false};
 
 type ItemRow = {
@@ -107,13 +113,65 @@ function toTransaction(o: OrderRow): Transaction {
   };
 }
 
-export async function fetchRemoteOrders(): Promise<RemoteOrdersResult> {
+/**
+ * Pull completed sales from Coop. Two modes:
+ *
+ * - **Live/default (no `range`):** the capped newest-MAX_ORDERS pull. Fast, and
+ *   all the preset filters (Today/Week/Month/All) only ever show recent sales,
+ *   which this window covers.
+ * - **Date-scoped (`range` with a `start`):** page the WHOLE `[start, end]`
+ *   window via fetchAllPaged, regardless of age. A Custom range can reach back
+ *   past the newest-MAX_ORDERS cut, so the capped pull would silently drop the
+ *   older part of the month (every device would then show only the slice still
+ *   inside the cap plus whatever it recorded locally). Scoping loads the range
+ *   in full so every device reconstructs the same historical total.
+ */
+export async function fetchRemoteOrders(
+  range?: {start: Date | null; end: Date | null} | null,
+): Promise<RemoteOrdersResult> {
   const sb = getSupabase();
   if (!sb) return {ok: false};
+
+  // Postgres sends microseconds ("...00.123456+00:00"); trim to the millisecond
+  // form every JS engine parses, since callers compare these as Dates.
+  const trimMicros = (iso: string) => iso.replace(/(\.\d{3})\d+/, '$1');
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
+    if (range && range.start) {
+      const startIso = range.start.toISOString();
+      const endIso = range.end ? range.end.toISOString() : null;
+      // Page by the PK so the 1000-row cap can't silently truncate a busy month.
+      const paged = await fetchAllPaged<OrderRow>((from, to) => {
+        const base = sb
+          .from('pos_orders')
+          .select(ORDERS_SELECT) // pagination-ok: paged in full via fetchAllPaged (.range below)
+          .is('pos_order_prizes.voided_at', null)
+          .gte('created_at', startIso);
+        const bounded = endIso ? base.lte('created_at', endIso) : base;
+        return bounded
+          .order('id', {ascending: true})
+          .order('id', {ascending: true, referencedTable: 'pos_order_items'})
+          .range(from, to)
+          .abortSignal(controller.signal) as unknown as PromiseLike<{data: OrderRow[] | null; error: unknown}>;
+      });
+      if (!paged.ok) return {ok: false};
+      const orders = paged.rows;
+      const prizeClientUuids = orders
+        .filter((o) => o.client_uuid && (o.pos_order_prizes?.length ?? 0) > 0)
+        .map((o) => o.client_uuid as string);
+      // Coverage is exactly the requested window, so the prune may drop local
+      // rows Coop lacks inside it, but never ones outside it.
+      return {
+        ok: true,
+        orders: orders.map(toTransaction),
+        prizeClientUuids,
+        windowStart: trimMicros(startIso),
+        windowEnd: endIso ? trimMicros(endIso) : null,
+      };
+    }
+
     // MAX_ORDERS (500) stays under PostgREST's 1000-row cap, and embedded rows
     // don't count toward it, so this single read is complete without paging.
     const {data, error} = await sb
@@ -130,13 +188,9 @@ export async function fetchRemoteOrders(): Promise<RemoteOrdersResult> {
     const prizeClientUuids = orders
       .filter((o) => o.client_uuid && (o.pos_order_prizes?.length ?? 0) > 0)
       .map((o) => o.client_uuid as string);
-    // Postgres sends microseconds ("...00.123456+00:00"); trim to the millisecond
-    // form every JS engine parses, since callers compare this as a Date.
     const windowStart =
-      orders.length >= MAX_ORDERS
-        ? orders[orders.length - 1].created_at.replace(/(\.\d{3})\d+/, '$1')
-        : null;
-    return {ok: true, orders: orders.map(toTransaction), prizeClientUuids, windowStart};
+      orders.length >= MAX_ORDERS ? trimMicros(orders[orders.length - 1].created_at) : null;
+    return {ok: true, orders: orders.map(toTransaction), prizeClientUuids, windowStart, windowEnd: null};
   } catch {
     return {ok: false};
   } finally {
