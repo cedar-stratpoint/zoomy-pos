@@ -12,6 +12,33 @@ Dates are local working dates (GMT+8). Newest first.
 
 ---
 
+## 2026-10-28 — Drop the "All" date filter; drain the outbox on app foreground — `feat(transactions)` · `feat(sync)`
+
+Two follow-ups to the date-range fix below.
+
+**Removed the "All" date filter.** It was the one filter with no window to scope to,
+so it still pulled only the newest 500 orders and under-reported all-time totals the
+same way the old bug did (fixing it properly needs load-more-on-scroll). Coop (the
+dashboard) is the right platform for all-time reporting, so the POS filter is now just
+**Today / Week / Month / Custom**, all bounded, all loaded in full. Dropped `'all'`
+from `DateFilter` and `getFilterRange`, and the filter from the Transactions dropdown
+(`utils/date-range.ts`, `app/modals/transactions.tsx`). A `custom` filter before a
+range is picked still falls back to the capped pull, so that path stays live.
+
+**Outbox now drains when the app returns to the foreground.** Until now the native
+app only pushed pending sales on launch, on a 30s timer, and via "Sync now" (the
+"back online" event is web-only). So a cashier who sold offline, locked the phone,
+and reopened near Wi-Fi had to wait out a timer tick before those sales reached Coop,
+and until they did, each sale lived only on that one device. The app now also drains
+(and re-pulls the catalog) on every real background to foreground transition
+(`AppState`, `app/_layout.tsx`), shrinking that window to near-zero. `drainOutbox` is
+single-flight and a no-op when nothing is pending or still offline, so the extra
+trigger is free.
+
+**Not included.** True network-reconnect detection while the app stays foregrounded
+(needs a NetInfo native dependency); the 30s interval still covers that case. The
+foreground drain covers the common "reopened the app" path without a new dependency.
+
 ## 2026-10-28 — Transactions: every bounded date filter loads its whole window, not the newest 500 — `fix(transactions)`
 
 The Transactions screen under-reported any busy window. Two phones viewing the
