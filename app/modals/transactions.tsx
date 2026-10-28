@@ -267,6 +267,14 @@ export default function TransactionsModal() {
     importResultTimer.current = setTimeout(() => setImportResult(null), 4000);
   }
 
+  // Latest date-filter values for the (stable) remote fetch, so switching filters
+  // doesn't re-create the loader. A Custom range scopes the Coop pull to that
+  // window (loaded in full, past the newest-N cap); presets keep the capped pull.
+  const dateFilterRef = useRef(dateFilter);
+  const customRangeRef = useRef(customRange);
+  dateFilterRef.current = dateFilter;
+  customRangeRef.current = customRange;
+
   // Local sales are the rich source; Coop fills in sales made on other devices,
   // so every device shows the same list. Remote is best-effort (offline -> local
   // only). Local resolves first for an instant paint, then the merge fills in.
@@ -286,7 +294,13 @@ export default function TransactionsModal() {
     // read below fills in prizes logged on other devices / backfilled on Coop.
     const localPrizeUuids = await getOrderClientUuidsWithPrizes().catch(() => [] as string[]);
     setPrizeUuids(new Set(localPrizeUuids));
-    const remote = await fetchRemoteOrders();
+    // Scope the Coop pull to a Custom range so a historical window loads in full
+    // (paginated, past the newest-N cap). Preset/live views keep the capped pull.
+    const scopedRange =
+      dateFilterRef.current === 'custom' && customRangeRef.current
+        ? getFilterRange('custom', customRangeRef.current)
+        : null;
+    const remote = await fetchRemoteOrders(scopedRange);
     if (!remote.ok) return;
     remotePrizeUuidsRef.current = remote.prizeClientUuids;
     setPrizeUuids(new Set<string>([...localPrizeUuids, ...remote.prizeClientUuids]));
@@ -303,7 +317,7 @@ export default function TransactionsModal() {
       const remoteUuids = new Set(
         remote.orders.map((r) => r.client_uuid).filter((u): u is string => !!u)
       );
-      const toPrune = transactionsToPrune(local, remoteUuids, remote.windowStart);
+      const toPrune = transactionsToPrune(local, remoteUuids, remote.windowStart, remote.windowEnd);
       if (toPrune.length > 0) {
         await deleteTransactionsByClientUuids(toPrune.map((t) => t.client_uuid!));
         const fresh = await getAllTransactions();
@@ -338,6 +352,16 @@ export default function TransactionsModal() {
       getAllProducts().then(setCatalog).catch(() => {});
     }, [loadTransactions])
   );
+
+  // A date-filter change re-pulls Coop scoped to the new window (a Custom range
+  // loads a full historical month; presets fall back to the capped live pull).
+  // fresh, so a pull already running for the old window doesn't satisfy this one.
+  // Skips the first run (the focus effect above already did the initial load).
+  const firstFilterRun = useRef(true);
+  useEffect(() => {
+    if (firstFilterRun.current) { firstFilterRun.current = false; return; }
+    loadTransactions({ fresh: true });
+  }, [dateFilter, customRange, loadTransactions]);
 
   // Load the free item(s) won for the open detail view. Local rows (offline-safe)
   // unioned with Coop's, deduped by the prize's client_uuid so a synced prize isn't
@@ -375,8 +399,20 @@ export default function TransactionsModal() {
     return result;
   }, [transactions, dateFilter, customRange, methodFilter]);
 
+  // Count and total describe the SAME set: completed sales only. Voided sales
+  // still render in the list (clearly marked), but they don't add to revenue, so
+  // they must not inflate the headline count either. Any voided in range are
+  // surfaced as a separate note so the two numbers reconcile.
+  const completedFiltered = useMemo(
+    () => filtered.filter((t) => t.status === 'completed'),
+    [filtered]
+  );
   const filteredTotal = useMemo(
-    () => filtered.filter((t) => t.status === 'completed').reduce((sum, t) => sum + t.total, 0),
+    () => completedFiltered.reduce((sum, t) => sum + t.total, 0),
+    [completedFiltered]
+  );
+  const voidedCount = useMemo(
+    () => filtered.reduce((n, t) => (t.status === 'voided' ? n + 1 : n), 0),
     [filtered]
   );
 
@@ -876,7 +912,10 @@ export default function TransactionsModal() {
       <TourTarget id="tx-summary">
       <View style={styles.summaryBar}>
         <View style={styles.summaryLeft}>
-          <Text style={styles.summaryCount}>{filtered.length} transaction{filtered.length !== 1 ? 's' : ''}</Text>
+          <Text style={styles.summaryCount}>
+            {completedFiltered.length} transaction{completedFiltered.length !== 1 ? 's' : ''}
+            {voidedCount > 0 ? ` · ${voidedCount} voided` : ''}
+          </Text>
           <Text style={styles.summaryTotal}>₱{filteredTotal.toFixed(2)}</Text>
         </View>
         <View style={styles.summaryActions}>

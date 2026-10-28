@@ -160,4 +160,27 @@ describe('transactionsToPrune', () => {
     const windowStart = '2026-09-20T00:00:00.000+00:00';
     expect(transactionsToPrune([tied], new Set(), windowStart)).toEqual([]);
   });
+
+  // Date-scoped pull: coverage is a closed [windowStart, windowEnd] window, so a
+  // synced local row NEWER than windowEnd was not read and must survive.
+  it('never prunes a synced row newer than a date-scoped pull end', () => {
+    const newer = tx({ id: 1, created_at: '2026-10-05T03:00:00.000Z', client_uuid: 'newer', synced_at: '2026-10-05T03:00:01.000Z' });
+    const windowStart = '2026-09-01T00:00:00.000Z';
+    const windowEnd = '2026-10-01T00:00:00.000Z';
+    expect(transactionsToPrune([newer], new Set(), windowStart, windowEnd)).toEqual([]);
+  });
+
+  it('still prunes a synced row inside a date-scoped window that Coop lacks', () => {
+    const gone = tx({ id: 1, created_at: '2026-09-15T03:00:00.000Z', client_uuid: 'gone', synced_at: '2026-09-15T03:00:01.000Z' });
+    const windowStart = '2026-09-01T00:00:00.000Z';
+    const windowEnd = '2026-10-01T00:00:00.000Z';
+    expect(transactionsToPrune([gone], new Set(), windowStart, windowEnd)).toEqual([gone]);
+  });
+
+  it('keeps a synced row at exactly the date-scoped end boundary', () => {
+    const tied = tx({ id: 1, created_at: '2026-10-01T00:00:00.000Z', client_uuid: 'tied', synced_at: '2026-10-01T00:00:01.000Z' });
+    const windowStart = '2026-09-01T00:00:00.000Z';
+    const windowEnd = '2026-10-01T00:00:00.000Z';
+    expect(transactionsToPrune([tied], new Set(), windowStart, windowEnd)).toEqual([]);
+  });
 });

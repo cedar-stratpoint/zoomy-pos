@@ -66,22 +66,29 @@ export function isLocalTransaction(t: Transaction): boolean {
  * or the push hasn't resolved yet) is never a candidate, regardless of what
  * remoteUuids says, so a pending sale can never be mistaken for a deletion.
  *
- * `windowStart` is the oldest order the capped remote pull covered (null when the
- * pull was complete). A sale older than it simply fell outside the pull, so it is
- * never a candidate: absence there means "not read", not "deleted on Coop". A
- * sale at exactly that instant is also kept, since the cap may have cut between
- * orders sharing the timestamp.
+ * `windowStart` / `windowEnd` bound the instant range the remote pull covered, so
+ * a sale outside that range is never a candidate: absence there means "not read",
+ * not "deleted on Coop".
+ * - `windowStart` (oldest covered): for a capped live pull it's the oldest order
+ *   read (null when the pull was complete); for a date-scoped pull it's the range
+ *   start. A sale older than it is kept.
+ * - `windowEnd` (newest covered): null for the live pull (covered up to now); the
+ *   range end for a date-scoped pull. A sale newer than it is kept.
+ * A sale at exactly either boundary is also kept, since the cap may have cut
+ * between orders sharing a timestamp.
  */
 export function transactionsToPrune(
   local: Transaction[],
   remoteUuids: ReadonlySet<string>,
   windowStart: string | null = null,
+  windowEnd: string | null = null,
 ): Transaction[] {
   return local.filter(
     (t) =>
       t.client_uuid &&
       t.synced_at &&
       !remoteUuids.has(t.client_uuid) &&
-      (windowStart === null || new Date(t.created_at) > new Date(windowStart)),
+      (windowStart === null || new Date(t.created_at) > new Date(windowStart)) &&
+      (windowEnd === null || new Date(t.created_at) < new Date(windowEnd)),
   );
 }
