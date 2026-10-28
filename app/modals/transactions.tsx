@@ -71,7 +71,6 @@ const DATE_FILTERS: { key: DateFilter; label: string }[] = [
   { key: 'today', label: 'Today' },
   { key: 'week', label: 'Week' },
   { key: 'month', label: 'Month' },
-  { key: 'all', label: 'All' },
   { key: 'custom', label: 'Custom' },
 ];
 
@@ -510,7 +509,7 @@ export default function TransactionsModal() {
     try {
       const label = dateFilter === 'custom' && customRange
         ? formatRangeForFilename(customRange)
-        : dateFilter === 'all' ? 'all' : dateFilter;
+        : dateFilter;
       await exportTransactionsZip(filtered, label);
     } catch {
       Alert.alert('Export failed', 'Could not export transactions. Please try again.');
