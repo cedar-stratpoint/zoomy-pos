@@ -1,4 +1,6 @@
-export type DateFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
+// No 'all' (all-time): the POS pull is always a bounded window so a busy history
+// loads in full on every device; Coop is the platform for all-time reporting.
+export type DateFilter = 'today' | 'week' | 'month' | 'custom';
 export type DateRange = { start: Date; end: Date };
 export type CalendarDay = { date: Date; inCurrentMonth: boolean };
 
@@ -53,8 +55,6 @@ export function getFilterRange(
     }
     case 'month':
       return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: null };
-    case 'all':
-      return { start: null, end: null };
     case 'custom':
       if (!customRange) return { start: null, end: null };
       return { start: startOfDay(customRange.start), end: endOfDay(customRange.end) };
