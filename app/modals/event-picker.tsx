@@ -45,13 +45,12 @@ export default function EventPickerModal() {
   );
 
   async function choose(e: PosEvent) {
+    // Selecting an event only marks it as this device's active event and highlights
+    // it here; we stay on the picker so the pick is visibly confirmed. Highlight
+    // first (local state) so it reads instantly, then persist. Counting the opening
+    // float is a separate step reached from the header event chip, not forced here.
+    setSelectedId(e.event_id);
     await setSelectedEventId(e.event_id);
-    // Prompt for the opening float only when it isn't recorded yet (on any device).
-    if (e.opening_cash == null) {
-      router.replace('/modals/event-setup');
-    } else {
-      router.back();
-    }
   }
 
   if (!loaded) return <SafeAreaView style={styles.container} />;
