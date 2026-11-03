@@ -12,6 +12,30 @@ Dates are local working dates (GMT+8). Newest first.
 
 ---
 
+## 2026-11-03 — Promote multi-event to prod — `feat(events)`
+
+Multi-event ships to production. Same-day and overlapping events are now allowed,
+and the cashier declares which event this device logs sales to. What's now live on
+prod (cherry-picked from staging onto `main`):
+
+- **Pick which event a sale belongs to.** When two or more events run today, the
+  header event chip becomes a switcher and the Pay flow hard-gates until the cashier
+  picks one in the "Choose event" picker. One event still auto-selects silently.
+- **Transactions multi-event.** Event filter, a per-sale event badge, and edit-sale
+  reassignment that syncs back to Coop via `edit_pos_order` (now carrying `event_id`).
+- **Picker polish.** Alphabetical default order; the Transactions badge sits at the
+  tile bottom-right; and selecting an event highlights it in place instead of jumping
+  to the edit form (see the entry below).
+
+Coop prod Supabase (`qkxbwzdxhwcbwgriwipi`) migration applied in one pass
+(`supabase/multi_event_2026-10-01.sql`, mirrored in `supabase/pos_schema.sql`):
+`upsert_pos_event` drops the overlap guard, `attribute_untagged_orders_to_event`
+only back-tags days covered by exactly one event, new `set_pos_order_event`
+(service_role) for dashboard reassign, and `edit_pos_order` carries `event_id`. All
+`CREATE OR REPLACE`, additive-only, verified against prod before applying.
+
+---
+
 ## 2026-11-03 — Picking an event in the picker no longer jumps to the edit form — `fix(events)`
 
 The "Choose event" picker tagged a tap with a hidden side trip: if the chosen event
