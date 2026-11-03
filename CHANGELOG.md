@@ -12,6 +12,20 @@ Dates are local working dates (GMT+8). Newest first.
 
 ---
 
+## 2026-11-03 — Picking an event in the picker no longer jumps to the edit form — `fix(events)`
+
+The "Choose event" picker tagged a tap with a hidden side trip: if the chosen event
+had no opening float recorded yet (the common case for a fresh same-day event), it
+`router.replace`d straight to the Event day edit form instead of just marking the
+pick. Cashiers had to back out to confirm the selection had taken. Now a tap only
+selects and highlights the event and stays on the picker, so the checkmark is the
+confirmation. Counting the opening float stays a separate, deliberate step from the
+header event chip (which opens the setup form once an event is resolved), so nothing
+is lost. `app/modals/event-picker.tsx` `choose()` drops the `opening_cash`-based
+navigation and updates local state first for an instant highlight.
+
+---
+
 ## 2026-10-28 — Drop the "All" date filter; drain the outbox on app foreground — `feat(transactions)` · `feat(sync)`
 
 Two follow-ups to the date-range fix below.
