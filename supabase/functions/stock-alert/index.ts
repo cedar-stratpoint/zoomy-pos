@@ -108,10 +108,25 @@ Deno.serve(async (req) => {
 
     // If we can't actually send, DON'T claim the crossing (no dedup insert), so it
     // still alerts once the key/recipients are in place. Check before writing.
-    const userRows = await rest('pos_dashboard_users?select=email').then((r) => r.json());
+    // Tenant fence: only Zoomy company members get the Zoomy stock alert. A
+    // signed-in dashboard user who belongs ONLY to another tenant (e.g. a
+    // Goldline/Nichido user) is in pos_dashboard_users but not in company_users
+    // for 'zoomy', so they are filtered out. The env fallback is operator-
+    // controlled and always honored; an empty membership read falls back to it
+    // only rather than risk mailing another tenant.
+    const [userRows, zoomyRows] = await Promise.all([
+      rest('pos_dashboard_users?select=email').then((r) => r.json()),
+      rest('company_users?company_id=eq.zoomy&select=user_email').then((r) => r.json()),
+    ]);
+    const zoomyMembers = new Set(
+      (Array.isArray(zoomyRows) ? zoomyRows : []).map((r: {user_email: string}) => String(r.user_email).trim().toLowerCase()).filter(Boolean),
+    );
+    const dashboardEmails = (Array.isArray(userRows) ? userRows : [])
+      .map((u: {email: string}) => u.email)
+      .filter((e) => zoomyMembers.has(String(e).trim().toLowerCase()));
     const set = new Set<string>();
     const recipients: string[] = [];
-    for (const e of [...(Array.isArray(userRows) ? userRows : []).map((u: {email: string}) => u.email), ...EMAIL_TO_FALLBACK]) {
+    for (const e of [...dashboardEmails, ...EMAIL_TO_FALLBACK]) {
       const k = String(e).trim().toLowerCase();
       if (k && !set.has(k)) {
         set.add(k);
