@@ -12,6 +12,30 @@ Dates are local working dates (GMT+8). Newest first.
 
 ---
 
+## 2026-11-05 — Stock emails no longer leak across tenants — `fix(notifications)`
+
+A Goldline/Nichido user (Justin Velez) received the Zoomy "Stock digest" email.
+Cause: the stock digest and immediate stock-alert both mailed *everyone* in
+`pos_dashboard_users` (anyone who has signed into the Coop dashboard). Now that
+the dashboard serves more than one tenant, a user who signs in only to work on
+Goldline was still a dashboard sign-in, so they landed on the Zoomy recipient
+list.
+
+Fix: scope recipients to Zoomy company members. Both edge functions
+(`stock-digest`, `stock-alert`) and the Node fallback
+(`zoomy-observability` `loadRecipients`) now intersect the signed-in dashboard
+users with `company_users` where `company_id = 'zoomy'`, so a user who belongs
+only to another tenant (or is a data-blind `coop_admin`) is filtered out. The
+`EMAIL_TO` env fallback is operator-controlled and still always honored; if the
+membership read hiccups the Zoomy set is empty and we fall back to the env list
+only, rather than risk mailing another tenant. This is the "vice versa" half too:
+when Nichido gets its own notifications they will scope to `company_id='goldline'`
+the same way.
+
+Deploy note: the live senders are the Supabase edge functions fired by pg_cron.
+This code change only takes effect once `stock-digest` and `stock-alert` are
+redeployed to the Staging and Coop prod projects.
+
 ## 2026-11-03 — Picking an event in the picker no longer jumps to the edit form — `fix(events)`
 
 The "Choose event" picker tagged a tap with a hidden side trip: if the chosen event

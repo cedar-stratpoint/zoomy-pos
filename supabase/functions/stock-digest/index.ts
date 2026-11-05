@@ -250,13 +250,18 @@ Deno.serve(async (req) => {
   try {
     const dry = new URL(req.url).searchParams.get('dry') === '1';
     const since = new Date(Date.now() - FORECAST_WINDOW_DAYS * 86400000).toISOString();
-    const [cfgRows, planRows, products, inventory, movesRaw, userRows] = await Promise.all([
+    const [cfgRows, planRows, products, inventory, movesRaw, userRows, zoomyRows] = await Promise.all([
       rest('pos_settings?key=eq.stock_forecast_config&select=value'),
       rest('pos_settings?key=eq.next_event_plan&select=value'),
       rest('pos_products?select=product_id,name,category&order=name.asc'),
       rest('pos_inventory?select=product_id,stock'),
       restAll('pos_stock_movements?reason=eq.sale&created_at=gte.' + since + '&select=product_id,delta,created_at&order=id.asc'),
       rest('pos_dashboard_users?select=email'),
+      // Tenant fence: only Zoomy company members get the Zoomy stock digest. A
+      // signed-in dashboard user who belongs ONLY to another tenant (e.g. a
+      // Goldline/Nichido user) is in pos_dashboard_users but not here, so they
+      // are filtered out below. See recipients loop.
+      rest('company_users?company_id=eq.zoomy&select=user_email'),
     ]);
 
     const stockByProduct = new Map((Array.isArray(inventory) ? inventory : []).map((r: {product_id: string; stock: number}) => [r.product_id, Number(r.stock ?? 0)]));
@@ -272,9 +277,20 @@ Deno.serve(async (req) => {
     const forecast = computeForecast(productsWithStock, saleMoves, plan, config, new Date());
     const {subject, html} = digestEmail(forecast, plan, INVENTORY_URL, ENV_TAG);
 
+    // Zoomy company members (lowercased). A dashboard user is mailed only if they
+    // belong to Zoomy; the env fallback is operator-controlled and always honored.
+    // If the membership read hiccups the set is empty, so we fall back to the env
+    // list only rather than risk mailing another tenant.
+    const zoomyMembers = new Set(
+      (Array.isArray(zoomyRows) ? zoomyRows : []).map((r: {user_email: string}) => String(r.user_email).trim().toLowerCase()).filter(Boolean),
+    );
+    const dashboardEmails = (Array.isArray(userRows) ? userRows : [])
+      .map((u: {email: string}) => u.email)
+      .filter((e) => zoomyMembers.has(String(e).trim().toLowerCase()));
+
     const set = new Set<string>();
     const recipients: string[] = [];
-    for (const e of [...(Array.isArray(userRows) ? userRows : []).map((u: {email: string}) => u.email), ...EMAIL_TO_FALLBACK]) {
+    for (const e of [...dashboardEmails, ...EMAIL_TO_FALLBACK]) {
       const k = String(e).trim().toLowerCase();
       if (k && !set.has(k)) { set.add(k); recipients.push(String(e).trim()); }
     }
