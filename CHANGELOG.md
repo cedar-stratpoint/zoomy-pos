@@ -12,6 +12,36 @@ Dates are local working dates (GMT+8). Newest first.
 
 ---
 
+## 2026-11-15 — Lookup indexes on the local DB and `pos_orders.created_at` — `perf(db)`
+
+First PR of the POS performance plan (indexes → N+1 batching → optimistic
+listing toggles → settings/catalog cache → image tidy → press states, 44pt
+targets, haptics). Until now the local SQLite DB had a single index
+(`products.sku`), so every Transactions load scanned `transactions`, made
+SQLite build a throwaway automatic index on `transaction_items` for the join,
+and sorted the result in a temp B-tree. The same went for client_uuid lookups
+(void, remarks, prune), the product grid, the variant picker, bundle sync
+and prize lookups.
+
+- **Local (`db/schema.ts`, `LOOKUP_INDEXES_SQL`):** seven `CREATE INDEX IF NOT
+  EXISTS` on `transaction_items(transaction_id)`, `transactions(created_at)`,
+  `transactions(client_uuid)` (partial), `product_variants(product_id)`,
+  `products(is_active, name)`, `saved_bundles(bundle_uuid)` (partial) and
+  `order_prizes(order_client_uuid)`. They run after every `ADD COLUMN`, so an
+  upgraded device has each column before it gets indexed. `EXPLAIN QUERY PLAN`
+  against the real schema confirms each query now uses its index, and the
+  history query no longer sorts in a temp B-tree.
+- **Decision: plain, not UNIQUE,** for `client_uuid` and `bundle_uuid`. The
+  indexes are there for lookup speed. A UNIQUE build would fail outright on any
+  device that already has a duplicate, and Coop enforces uniqueness anyway.
+- **Coop Staging:** `pos_orders_created_at_idx` (the Transactions date-window
+  pull filters `created_at` and the unbounded pull sorts `created_at DESC`; it
+  had no index). Applied to Staging only; reviewed SQL in
+  `supabase/pos_orders_created_at_index_2026-11-15.sql` and mirrored in
+  `pos_schema.sql`. **Prod promotion pending.**
+
+---
+
 ## 2026-11-05 — Stock emails no longer leak across tenants — `fix(notifications)`
 
 A Goldline/Nichido user (Justin Velez) received the Zoomy "Stock digest" email.

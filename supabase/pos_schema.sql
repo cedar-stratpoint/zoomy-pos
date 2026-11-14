@@ -1321,6 +1321,9 @@ alter table public.pos_orders
   add column if not exists event_id uuid references public.pos_events(event_id),
   add column if not exists pet_type text;   -- 'dog' | 'cat' | 'both' | null
 create index if not exists pos_orders_event_id_idx on public.pos_orders(event_id);
+-- Date-window pulls (POS Transactions) filter and sort on created_at.
+-- See pos_orders_created_at_index_2026-11-15.sql.
+create index if not exists pos_orders_created_at_idx on public.pos_orders(created_at);
 
 -- upsert_pos_event: create or edit an event (incl. opening cash). Idempotent on
 -- the client-supplied event_id. Only overwrites a field the payload carries, so
