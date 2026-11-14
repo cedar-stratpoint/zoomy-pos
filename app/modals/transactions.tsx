@@ -7,8 +7,8 @@ import { router, useFocusEffect } from 'expo-router';
 import { TransactionRow } from '../../components/TransactionRow';
 import { CalendarRangeModal } from '../../components/CalendarRangeModal';
 import { PullToRefresh } from '../../components/PullToRefresh';
-import { getAllTransactions, updateTransactionRemarks, markRemarksSynced, deleteTransactionsByClientUuids, replaceLocalTransactionContents, Transaction, PaymentMethod, PetType } from '../../db/transactions';
-import { fetchRemoteOrders, setRemoteOrderRemarks, editRemoteOrder, fetchRemoteOrderEntries, fetchRemoteOrderPrizes } from '../../utils/orders-remote';
+import { getAllTransactions, deleteTransactionsByClientUuids, replaceLocalTransactionContents, Transaction, PaymentMethod, PetType } from '../../db/transactions';
+import { fetchRemoteOrders, editRemoteOrder, fetchRemoteOrderEntries, fetchRemoteOrderPrizes } from '../../utils/orders-remote';
 import type { EditEntry } from '../../utils/order-entries';
 import { PetTypeChips } from '../../components/PetTypeChips';
 import {
@@ -18,6 +18,7 @@ import {
 import { isSameDay } from '../../utils/date-range';
 import { getSavedBundles, type SavedBundle } from '../../db/saved-bundles';
 import { mergeTransactions, isLocalTransaction, transactionsToPrune } from '../../utils/merge-transactions';
+import { saveRemarks } from '../../utils/save-remarks';
 import { refreshPendingCount } from '../../utils/outbox';
 import { exportTransactionsZip } from '../../utils/export-csv';
 import { importTransactionsZip } from '../../utils/import-csv';
@@ -564,26 +565,34 @@ export default function TransactionsModal() {
     setRemarksModalVisible(true);
   }
 
+  function setRemarksInView(id: number, remarks: string | null) {
+    setSelected((cur) => (cur && cur.id === id ? { ...cur, remarks } : cur));
+    setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, remarks } : t)));
+  }
+
+  // Optimistic: the note shows and the sheet closes at once, then saves in the
+  // background (see utils/save-remarks.ts). The old note only comes back when
+  // nothing kept the new one; a note Coop missed on a sale stored here stays,
+  // and the outbox retries it.
   async function handleSaveRemarks() {
     if (!selected) return;
+    const { id, client_uuid: clientUuid, remarks: previous } = selected;
     const trimmed = remarksInput.trim() || null;
-    // Local rows persist to SQLite (updateTransactionRemarks nulls
-    // remarks_synced_at); any synced row (has a client_uuid) also writes to Coop
-    // so the note shows on every device. If that Coop write fails, the outbox
-    // drain retries it later.
-    if (isLocalTransaction(selected)) {
-      await updateTransactionRemarks(selected.id, trimmed);
-    }
-    if (selected.client_uuid) {
-      if (await setRemoteOrderRemarks(selected.client_uuid, trimmed)) {
-        await markRemarksSynced(selected.client_uuid);
-      }
+    setRemarksInView(id, trimmed);
+    setRemarksModalVisible(false);
+
+    const outcome = await saveRemarks({ id, isLocal: isLocalTransaction(selected), clientUuid, remarks: trimmed });
+    if (outcome === 'pending') {
+      showToast({ variant: 'success', title: 'Note saved on this device', message: 'It syncs to Coop once you’re back online.' });
+    } else if (outcome === 'rejected' || outcome === 'failed') {
+      setRemarksInView(id, previous);
+      showToast({
+        variant: 'error',
+        title: 'Note not saved',
+        message: outcome === 'rejected' ? 'Couldn’t reach Coop. Check the connection and try again.' : 'Couldn’t save it on this device. Try again.',
+      });
     }
     refreshPendingCount().catch(() => {});
-    const updated = { ...selected, remarks: trimmed };
-    setSelected(updated);
-    setTransactions((prev) => prev.map((t) => t.id === selected.id ? updated : t));
-    setRemarksModalVisible(false);
   }
 
   // A sale can be voided from any device: locally if it lives here, and on Coop
