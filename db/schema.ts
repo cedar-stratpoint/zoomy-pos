@@ -44,6 +44,29 @@ async function upgradeScanSamplesTable(db: SQLiteDatabase): Promise<void> {
   `));
 }
 
+/**
+ * Indexes for the columns the app filters, joins or sorts on. Runs after every
+ * ADD COLUMN above, so each indexed column exists on an upgraded device too.
+ * IF NOT EXISTS makes it a no-op after the first launch.
+ *
+ * The client_uuid and bundle_uuid indexes are plain, not UNIQUE: they exist
+ * for lookup speed, and a UNIQUE build would fail outright on any device that
+ * already holds a duplicate (uniqueness is enforced on Coop instead).
+ */
+export const LOOKUP_INDEXES_SQL = `
+  CREATE INDEX IF NOT EXISTS idx_transaction_items_transaction ON transaction_items(transaction_id);
+  CREATE INDEX IF NOT EXISTS idx_transactions_created ON transactions(created_at);
+  CREATE INDEX IF NOT EXISTS idx_transactions_client_uuid ON transactions(client_uuid) WHERE client_uuid IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_product_variants_product ON product_variants(product_id);
+  CREATE INDEX IF NOT EXISTS idx_products_active_name ON products(is_active, name);
+  CREATE INDEX IF NOT EXISTS idx_saved_bundles_uuid ON saved_bundles(bundle_uuid) WHERE bundle_uuid IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_order_prizes_order ON order_prizes(order_client_uuid);
+`;
+
+async function createLookupIndexes(db: SQLiteDatabase): Promise<void> {
+  await db.execAsync(LOOKUP_INDEXES_SQL);
+}
+
 export async function initSchema(): Promise<void> {
   const db = await getDatabase();
 
@@ -347,6 +370,8 @@ export async function initSchema(): Promise<void> {
   await db.runAsync(
     `ALTER TABLE pos_events ADD COLUMN closing_cash REAL`
   ).catch(() => {});
+
+  await createLookupIndexes(db);
 
   // One-time backfill so the first drain doesn't flag the entire history as
   // "pending". Gated by a settings marker so it runs at most once.
