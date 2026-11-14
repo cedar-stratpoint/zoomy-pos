@@ -190,16 +190,6 @@ export async function updateBundleEmoji(id: number, emoji: string | null): Promi
   await db.runAsync('UPDATE saved_bundles SET emoji = ? WHERE id = ?', [emoji, id]);
 }
 
-/** Fetch a single bundle by its shared uuid (for building a sync push payload). */
-export async function getBundleByUuid(uuid: string): Promise<SavedBundle | null> {
-  const db = await getDatabase();
-  const row = await db.getFirstAsync<BundleRow>(
-    `SELECT ${COLUMNS} FROM saved_bundles WHERE bundle_uuid = ? LIMIT 1`,
-    [uuid]
-  );
-  return row ? rowToBundle(row) : null;
-}
-
 /** Shape of a bundle pulled back from Coop for the local mirror. */
 export type RemoteBundle = {
   bundle_uuid: string;
@@ -224,18 +214,30 @@ export type RemoteBundle = {
 export async function reconcileRemoteBundles(remote: RemoteBundle[]): Promise<number> {
   const db = await getDatabase();
   let changed = 0;
+
+  // One read of every synced bundle up front, instead of a lookup per remote one.
+  const local = await db.getAllAsync<{ id: number; bundle_uuid: string }>(
+    'SELECT id, bundle_uuid FROM saved_bundles WHERE bundle_uuid IS NOT NULL'
+  );
+  const localUuids = new Set(local.map((l) => l.bundle_uuid));
   const seen = new Set<string>();
 
   for (const b of remote) {
     if (!b.bundle_uuid) continue;
     seen.add(b.bundle_uuid);
-    const existing = await getBundleByUuid(b.bundle_uuid);
     const itemsJson = JSON.stringify(b.items ?? []);
     const lines = b.line_categories ? JSON.stringify(b.line_categories) : null;
-    if (existing) {
+    if (localUuids.has(b.bundle_uuid)) {
+      // Only rows that actually differ count as changed: SQLite reports a
+      // change for a same-value UPDATE, which would make every pull look like
+      // a catalog change and reload the screen for nothing.
       const res = await db.runAsync(
-        'UPDATE saved_bundles SET name = ?, items_json = ?, price = ?, bundle_type = ?, pick_count = ?, line_categories = ?, emoji = ?, is_active = ? WHERE bundle_uuid = ?',
-        [b.name, itemsJson, b.price, b.bundle_type, b.pick_count, lines, b.emoji, b.is_active, b.bundle_uuid]
+        `UPDATE saved_bundles SET name = ?, items_json = ?, price = ?, bundle_type = ?, pick_count = ?, line_categories = ?, emoji = ?, is_active = ?
+          WHERE bundle_uuid = ?
+            AND (name IS NOT ? OR items_json IS NOT ? OR price IS NOT ? OR bundle_type IS NOT ? OR pick_count IS NOT ?
+                 OR line_categories IS NOT ? OR emoji IS NOT ? OR is_active IS NOT ?)`,
+        [b.name, itemsJson, b.price, b.bundle_type, b.pick_count, lines, b.emoji, b.is_active, b.bundle_uuid,
+         b.name, itemsJson, b.price, b.bundle_type, b.pick_count, lines, b.emoji, b.is_active]
       );
       changed += res.changes;
     } else {
@@ -247,15 +249,15 @@ export async function reconcileRemoteBundles(remote: RemoteBundle[]): Promise<nu
     }
   }
 
-  // Remove local synced bundles Coop no longer has (deleted on another device).
-  const synced = await db.getAllAsync<{ id: number; bundle_uuid: string }>(
-    'SELECT id, bundle_uuid FROM saved_bundles WHERE bundle_uuid IS NOT NULL'
-  );
-  for (const s of synced) {
-    if (!seen.has(s.bundle_uuid)) {
-      const res = await db.runAsync('DELETE FROM saved_bundles WHERE id = ?', [s.id]);
-      changed += res.changes;
-    }
+  // Remove local synced bundles Coop no longer has (deleted on another device),
+  // in one statement.
+  const staleIds = local.filter((l) => !seen.has(l.bundle_uuid)).map((l) => l.id);
+  if (staleIds.length > 0) {
+    const res = await db.runAsync(
+      `DELETE FROM saved_bundles WHERE id IN (${staleIds.map(() => '?').join(',')})`,
+      staleIds
+    );
+    changed += res.changes;
   }
 
   return changed;
