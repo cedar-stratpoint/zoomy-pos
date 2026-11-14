@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   StyleSheet, SafeAreaView, Switch, Alert, KeyboardAvoidingView, Platform, Modal,
@@ -24,6 +24,7 @@ import { F, R, type Palette } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { TourTarget, MaybeTourTarget } from '../../components/tour/TourTarget';
 import { useToast } from '../../components/Toast';
+import { runOptimistic } from '../../utils/optimistic';
 
 /** Pseudo-pill that shows the Bundle Presets instead of individual products. */
 const BUNDLES_LINE = 'Bundles';
@@ -52,6 +53,9 @@ export default function ProductsModal() {
   const [emojiDraft, setEmojiDraft] = useState('');
   // Delete confirm (product or bundle) — one shared modal, see handleConfirmDelete.
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'product' | 'bundle'; id: number; name: string } | null>(null);
+  // A toggle already waiting on Coop ignores further taps until it settles, so
+  // a quick double tap can't race two pushes and leave the switch wrong.
+  const togglesInFlight = useRef(new Set<string>());
   // Which product line's pills is active on the list view. Empty until the
   // catalog loads, then defaulted to the first line (Freeze Dried) below.
   const [activeLine, setActiveLine] = useState<string>('');
@@ -192,21 +196,52 @@ export default function ProductsModal() {
     cancelForm();
   }
 
-  async function handleToggleProduct(product: Product) {
-    const nextActive = product.is_active === 1 ? 0 : 1;
-    await updateProduct(product.id, {
+  function setProductActive(id: number, isActive: number) {
+    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, is_active: isActive } : p)));
+  }
+
+  function writeProductActive(product: Product, isActive: number) {
+    return updateProduct(product.id, {
       name: product.name,
       price: product.price,
       has_variants: product.has_variants === 1,
-      is_active: nextActive,
+      is_active: isActive,
       // Preserve tab + image (updateProduct writes these unconditionally).
       category: product.category,
       subcategory: product.subcategory,
       image_uri: product.image_uri,
       sku: product.sku,
     });
-    if (product.sku) pushProductListing(product.sku, nextActive === 1);
-    setProducts(await getAllProducts());
+  }
+
+  // Listing is Coop-authoritative: a change Coop never got is undone by the
+  // next catalog pull. So the switch flips at once, and if Coop rejects it the
+  // switch and the local row go back and the cashier is told. A product with no
+  // SKU has never synced, so it's a local-only change that always sticks.
+  async function handleToggleProduct(product: Product) {
+    const key = `product:${product.id}`;
+    if (togglesInFlight.current.has(key)) return;
+    togglesInFlight.current.add(key);
+    const nextActive = product.is_active === 1 ? 0 : 1;
+    const stuck = await runOptimistic({
+      show: () => setProductActive(product.id, nextActive),
+      persist: () => writeProductActive(product, nextActive),
+      push: async () => !product.sku || pushProductListing(product.sku, nextActive === 1),
+      undo: async () => {
+        await writeProductActive(product, product.is_active).catch(() => {});
+        setProductActive(product.id, product.is_active);
+      },
+    });
+    togglesInFlight.current.delete(key);
+    if (!stuck) showListingFailed(product.name, product.is_active === 1);
+  }
+
+  function showListingFailed(name: string, wasListed: boolean) {
+    showToast({
+      variant: 'error',
+      title: 'Couldn’t update Coop',
+      message: `${name} is ${wasListed ? 'listed' : 'unlisted'} again. Check the connection and try again.`,
+    });
   }
 
   function startEditProduct(product: Product) {
@@ -241,11 +276,32 @@ export default function ProductsModal() {
     cancelForm();
   }
 
+  function setBundleActive(id: number, isActive: number) {
+    setBundles((prev) => prev.map((b) => (b.id === id ? { ...b, is_active: isActive } : b)));
+  }
+
+  // Same optimistic flow as products. A bundle with no bundle_uuid predates
+  // sync and only lives on this device, so its toggle always sticks.
   async function handleToggleBundle(bundle: SavedBundle) {
-    await toggleSavedBundle(bundle.id, bundle.is_active === 1 ? 0 : 1);
-    const saved = await getSavedBundleById(bundle.id);
-    if (saved) pushBundle(saved);
-    setBundles(await getAllSavedBundles());
+    const key = `bundle:${bundle.id}`;
+    if (togglesInFlight.current.has(key)) return;
+    togglesInFlight.current.add(key);
+    const nextActive = bundle.is_active === 1 ? 0 : 1;
+    const stuck = await runOptimistic({
+      show: () => setBundleActive(bundle.id, nextActive),
+      persist: () => toggleSavedBundle(bundle.id, nextActive),
+      push: async () => {
+        if (!bundle.bundle_uuid) return true;
+        const saved = await getSavedBundleById(bundle.id);
+        return !!saved && pushBundle(saved);
+      },
+      undo: async () => {
+        await toggleSavedBundle(bundle.id, bundle.is_active).catch(() => {});
+        setBundleActive(bundle.id, bundle.is_active);
+      },
+    });
+    togglesInFlight.current.delete(key);
+    if (!stuck) showListingFailed(bundle.name, bundle.is_active === 1);
   }
 
   function startEditBundle(bundle: SavedBundle) {
@@ -486,6 +542,7 @@ export default function ProductsModal() {
                 <Ionicons name="trash-outline" size={14} color={colors.textSecondary} />
               </TouchableOpacity>
               <Switch
+                testID={`product-listing-${item.id}`}
                 value={item.is_active === 1}
                 onValueChange={() => handleToggleProduct(item)}
                 trackColor={{ false: colors.borderDark, true: colors.pink }}
@@ -535,6 +592,7 @@ export default function ProductsModal() {
                 <Ionicons name="trash-outline" size={14} color={colors.textSecondary} />
               </TouchableOpacity>
               <Switch
+                testID={`bundle-listing-${bundle.id}`}
                 value={bundle.is_active === 1}
                 onValueChange={() => handleToggleBundle(bundle)}
                 trackColor={{ false: colors.borderDark, true: colors.pink }}

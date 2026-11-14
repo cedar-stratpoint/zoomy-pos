@@ -12,6 +12,37 @@ Dates are local working dates (GMT+8). Newest first.
 
 ---
 
+## 2026-11-15 — Listing toggles and notes update instantly, and undo if Coop says no — `feat`
+
+Third PR of the POS performance plan.
+
+- **Bug fixed: listing toggles could silently undo themselves.** Products →
+  the listed switch (product or bundle) wrote SQLite, then fired the Coop push
+  and ignored the result. If Coop never got it, the screen said "unlisted" but
+  Coop still had it listed, and the next catalog pull quietly flipped it back.
+  Now the switch flips at once, the push is awaited, and on failure the switch
+  and the local row go back with a toast ("Beef Jerky is listed again. Check
+  the connection and try again."). A product with no SKU, or a legacy bundle
+  with no `bundle_uuid`, never syncs, so its toggle always sticks. A second tap
+  while the first is still waiting on Coop is ignored, so two pushes can't race.
+- **Notes (remarks) close instantly.** The sheet used to wait for Coop before
+  closing, which stalls on bazaar Wi-Fi. Now the note shows at once and saves
+  in the background (`utils/save-remarks.ts`). On a sale stored on this device
+  the note is kept even if Coop is unreachable (toast: "Note saved on this
+  device", and the outbox retries it). On a sale that only exists on Coop
+  (made on another device) nothing can retry it, so a failed write puts the
+  old note back and says so.
+- `utils/optimistic.ts` (`runOptimistic`: show → persist → push → undo on
+  failure) is the shared pattern for both toggles.
+- **Decision: order edits and voids stay server-first.** They change money and
+  stock, and Coop recomputes them. Rolling back a wrong total would be worse
+  than a short wait.
+- **Follow-up, not in this PR:** the product form's rename, reprice and emoji
+  pushes are fire-and-forget the same way, so they can be silently undone
+  by the next pull. They need their own pass, since a form save can partly fail.
+
+---
+
 ## 2026-11-15 — Batch the N+1 reads and writes — `perf`
 
 Second PR of the POS performance plan. Four places issued one query per row.
