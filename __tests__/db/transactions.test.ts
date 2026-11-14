@@ -22,7 +22,7 @@ beforeEach(() => {
 });
 
 describe('insertTransaction', () => {
-  it('inserts transaction row then all item rows', async () => {
+  it('inserts the transaction row, then every item in one statement', async () => {
     mockDb.runAsync
       .mockResolvedValueOnce({ lastInsertRowId: 10, changes: 1 }) // transaction
       .mockResolvedValue({ lastInsertRowId: 20, changes: 1 }); // items
@@ -47,15 +47,22 @@ describe('insertTransaction', () => {
     );
     expect(mockDb.runAsync).toHaveBeenNthCalledWith(
       2,
-      'INSERT INTO transaction_items (transaction_id, product_id, product_name, price, quantity, variant_id, variant_name) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [10, 1, 'Cake', 120, 2, null, null]
+      'INSERT INTO transaction_items (transaction_id, product_id, product_name, price, quantity, variant_id, variant_name) VALUES (?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?)',
+      [10, 1, 'Cake', 120, 2, null, null, 10, 2, 'Drink', 45, 1, null, null]
     );
-    expect(mockDb.runAsync).toHaveBeenNthCalledWith(
-      3,
-      'INSERT INTO transaction_items (transaction_id, product_id, product_name, price, quantity, variant_id, variant_name) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [10, 2, 'Drink', 45, 1, null, null]
-    );
+    expect(mockDb.runAsync).toHaveBeenCalledTimes(2);
     expect(id).toBe(10);
+  });
+
+  it('splits a very large item list into 100-row statements', async () => {
+    mockDb.runAsync.mockResolvedValue({ lastInsertRowId: 7, changes: 1 });
+    const items = Array.from({ length: 250 }, (_, i) => ({ productId: i, productName: `P${i}`, price: 1, quantity: 1 }));
+
+    await insertTransaction({ total: 250, cashTendered: 250, change: 0, paymentMethod: 'cash', items });
+
+    const itemCalls = mockDb.runAsync.mock.calls.filter(([sql]) => String(sql).startsWith('INSERT INTO transaction_items'));
+    expect(itemCalls.map(([, params]) => (params as unknown[]).length / 7)).toEqual([100, 100, 50]);
+    expect(itemCalls.flatMap(([, params]) => (params as unknown[]).filter((_, i) => i % 7 === 1))).toEqual(items.map((it) => it.productId));
   });
 
   it('passes variant fields when provided', async () => {
@@ -277,20 +284,15 @@ describe('replaceLocalTransactionContents', () => {
       'DELETE FROM transaction_items WHERE transaction_id = ?',
       [42]
     );
-    // 2,3) insert the two new lines against the same transaction id
+    // 2) insert both new lines in one statement against the same transaction id
     expect(mockDb.runAsync).toHaveBeenNthCalledWith(
       2,
       expect.stringContaining('INSERT INTO transaction_items'),
-      [42, 5, 'Beef', 200, 1, null, null]
+      [42, 5, 'Beef', 200, 1, null, null, 42, 6, 'Chicken', 200, 3, null, null]
     );
+    // 3) update fields + mark synced (synced_at is a timestamp string)
     expect(mockDb.runAsync).toHaveBeenNthCalledWith(
       3,
-      expect.stringContaining('INSERT INTO transaction_items'),
-      [42, 6, 'Chicken', 200, 3, null, null]
-    );
-    // 4) update fields + mark synced (synced_at is a timestamp string)
-    expect(mockDb.runAsync).toHaveBeenNthCalledWith(
-      4,
       expect.stringContaining('UPDATE transactions SET payment_method = ?, customer_handle = ?, pet_type = ?, total = ?, cash_tendered = ?, is_bundle = ?, event_id = ?, synced_at = ?'),
       ['qrph', '@edited', 'dog', 800, 800, 0, 'evt-1', expect.any(String), 42]
     );
