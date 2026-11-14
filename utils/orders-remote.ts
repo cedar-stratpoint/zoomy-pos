@@ -360,15 +360,17 @@ export async function fetchRemoteOrderEntries(
   const sb = getSupabase();
   if (!sb) return {ok: false};
   try {
-    const {data: order, error: oErr} = await sb
-      .from('pos_orders').select('id,total').eq('client_uuid', clientUuid).maybeSingle();
-    if (oErr || !order) return {ok: false};
-    const {data: items, error} = await sb
-      .from('pos_order_items')
-      .select('product_id,bundle_id,bundle_group,qty,unit_price,line_total')
-      .eq('order_id', (order as {id: string}).id); // pagination-ok: single-order scope
-    if (error || !items) return {ok: false};
-    const lines: RawOrderLine[] = (items as ItemRow2[]).map((it) => ({
+    // One round trip: the order and its lines as an embedded select (one sale's
+    // lines are far below the 1000-row cap).
+    const {data: order, error} = await sb
+      .from('pos_orders')
+      .select('total, pos_order_items(product_id, bundle_id, bundle_group, qty, unit_price, line_total)')
+      .eq('client_uuid', clientUuid)
+      .maybeSingle();
+    if (error || !order) return {ok: false};
+    const {total, pos_order_items: items} = order as unknown as {total: number | null; pos_order_items: ItemRow2[] | null};
+    if (!items) return {ok: false};
+    const lines: RawOrderLine[] = items.map((it) => ({
       product_id: it.product_id ?? null,
       bundle_id: it.bundle_id ?? null,
       bundle_group: it.bundle_group ?? null,
@@ -376,7 +378,7 @@ export async function fetchRemoteOrderEntries(
       unit_price: Number(it.unit_price ?? 0),
       line_total: Number(it.line_total ?? 0),
     }));
-    return {ok: true, entries: reconstructEntries(lines, Number((order as {total: number}).total ?? 0), defs)};
+    return {ok: true, entries: reconstructEntries(lines, Number(total ?? 0), defs)};
   } catch {
     return {ok: false};
   }
