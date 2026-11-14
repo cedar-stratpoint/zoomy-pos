@@ -12,6 +12,38 @@ Dates are local working dates (GMT+8). Newest first.
 
 ---
 
+## 2026-11-15 — Batch the N+1 reads and writes — `perf`
+
+Second PR of the POS performance plan. Four places issued one query per row.
+
+- **Sale line items** (`insertTransaction`, `importTransaction`,
+  `replaceLocalTransactionContents`): one multi-row `INSERT` (chunked at 100
+  rows to stay under SQLite's parameter cap) instead of one per line. This runs
+  on every sale. A single statement is atomic, so a sale's items now land all
+  at once. **Decision: no `withTransactionAsync` wrap** (the plan had one). The
+  existing comment holds: on the shared expo-sqlite connection a wrap doesn't
+  isolate concurrent reads. The outbox's 5s age gate stays as the guarantee.
+- **Bundle sync** (`reconcileRemoteBundles`): one read of the local bundles up
+  front instead of a `getBundleByUuid` per remote bundle, and one `DELETE … IN`
+  for bundles Coop dropped. **Bug fixed along the way:** a same-value `UPDATE`
+  still reports a change in SQLite, so every pull counted every bundle as
+  "changed" and reloaded the catalog screen for nothing. The update now only
+  matches rows where a field differs (`IS NOT`, so NULLs compare correctly;
+  checked against real SQLite). `getBundleByUuid` had no other callers and was
+  removed.
+- **Product export** (native + web): one grouped variants query
+  (`getActiveVariantsGroupedByProduct`) instead of one per product. The
+  duplicated `gatherCatalog` from both platform files moved into
+  `utils/export-products-catalog.ts`.
+- **Edit-sale prefill** (`fetchRemoteOrderEntries`): one embedded PostgREST
+  select (`pos_orders` + `pos_order_items`) instead of two round trips over
+  bazaar Wi-Fi. Run against Staging REST with the anon key: same 9 lines back.
+
+Not changed: the outbox still pushes one RPC per sale (deliberate, idempotent
+on `client_uuid`), and catalog sync writes only the products that changed.
+
+---
+
 ## 2026-11-15 — Lookup indexes on the local DB and `pos_orders.created_at` — `perf(db)`
 
 First PR of the POS performance plan (indexes → N+1 batching → optimistic
