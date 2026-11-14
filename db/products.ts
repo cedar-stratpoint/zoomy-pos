@@ -90,6 +90,22 @@ export async function getVariantsByProductId(productId: number): Promise<Product
   );
 }
 
+/** Every active variant, grouped by product, in one query (instead of one query
+ *  per product). Each product's list is name-sorted, same as getVariantsByProductId. */
+export async function getActiveVariantsGroupedByProduct(): Promise<Map<number, ProductVariant[]>> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<ProductVariant>(
+    'SELECT * FROM product_variants WHERE is_active = 1 ORDER BY product_id ASC, name ASC'
+  );
+  const grouped = new Map<number, ProductVariant[]>();
+  for (const v of rows) {
+    const list = grouped.get(v.product_id);
+    if (list) list.push(v);
+    else grouped.set(v.product_id, [v]);
+  }
+  return grouped;
+}
+
 export async function getAllVariantsByProductId(productId: number): Promise<ProductVariant[]> {
   const db = await getDatabase();
   return db.getAllAsync<ProductVariant>(

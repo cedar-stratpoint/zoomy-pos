@@ -1,3 +1,4 @@
+import type { SQLiteDatabase } from 'expo-sqlite';
 import { getDatabase } from './database';
 
 export type TransactionItem = {
@@ -55,6 +56,30 @@ type InsertItem = {
   variantName?: string;
 };
 
+/** Rows per multi-row INSERT. 7 bound values each keeps a chunk at 700, under
+ *  the 999-parameter cap of older SQLite builds. A cart never gets close; the
+ *  chunking only matters for a large CSV import. */
+const ITEM_INSERT_CHUNK = 100;
+
+/**
+ * Writes a sale's line items with one INSERT per chunk instead of one per line.
+ * A single statement is atomic, so the items of a normal sale land all at once
+ * (no window where only some of them exist).
+ */
+async function insertTransactionItems(db: SQLiteDatabase, transactionId: number, items: InsertItem[]): Promise<void> {
+  for (let i = 0; i < items.length; i += ITEM_INSERT_CHUNK) {
+    const chunk = items.slice(i, i + ITEM_INSERT_CHUNK);
+    const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
+    const params = chunk.flatMap((item) => [
+      transactionId, item.productId, item.productName, item.price, item.quantity, item.variantId ?? null, item.variantName ?? null,
+    ]);
+    await db.runAsync(
+      `INSERT INTO transaction_items (transaction_id, product_id, product_name, price, quantity, variant_id, variant_name) VALUES ${placeholders}`,
+      params
+    );
+  }
+}
+
 export async function insertTransaction(data: {
   total: number;
   cashTendered: number;
@@ -80,7 +105,7 @@ export async function insertTransaction(data: {
   // null by default — only meaningful once the sale is actually voided.
   const remarksSyncedAt = remarks ? null : createdAt;
 
-  // Plain sequential inserts (unchanged happy path). The outbox drain never
+  // Header, then all items in one statement. The outbox drain never
   // reads an in-flight sale because getPendingSyncTransactions ignores rows
   // younger than DRAIN_MIN_AGE_MS — a transaction wrap wouldn't help anyway,
   // since a concurrent read on this shared expo-sqlite connection sees the
@@ -91,12 +116,7 @@ export async function insertTransaction(data: {
   );
   const transactionId = result.lastInsertRowId;
 
-  for (const item of data.items) {
-    await db.runAsync(
-      'INSERT INTO transaction_items (transaction_id, product_id, product_name, price, quantity, variant_id, variant_name) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [transactionId, item.productId, item.productName, item.price, item.quantity, item.variantId ?? null, item.variantName ?? null]
-    );
-  }
+  await insertTransactionItems(db, transactionId, data.items);
 
   return transactionId;
 }
@@ -125,12 +145,11 @@ export async function importTransaction(data: {
 
   const transactionId = result.lastInsertRowId;
 
-  for (const item of data.items) {
-    await db.runAsync(
-      'INSERT INTO transaction_items (transaction_id, product_id, product_name, price, quantity, variant_id, variant_name) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [transactionId, 0, item.productName, item.price ?? 0, item.quantity, null, item.variantName ?? null]
-    );
-  }
+  await insertTransactionItems(
+    db,
+    transactionId,
+    data.items.map((item) => ({ productId: 0, productName: item.productName, price: item.price ?? 0, quantity: item.quantity, variantName: item.variantName ?? undefined })),
+  );
 
   return transactionId;
 }
@@ -153,12 +172,7 @@ export async function replaceLocalTransactionContents(
 ): Promise<void> {
   const db = await getDatabase();
   await db.runAsync('DELETE FROM transaction_items WHERE transaction_id = ?', [id]);
-  for (const it of items) {
-    await db.runAsync(
-      'INSERT INTO transaction_items (transaction_id, product_id, product_name, price, quantity, variant_id, variant_name) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [id, it.productId, it.productName, it.price, it.quantity, null, null]
-    );
-  }
+  await insertTransactionItems(db, id, items);
   await db.runAsync(
     'UPDATE transactions SET payment_method = ?, customer_handle = ?, pet_type = ?, total = ?, cash_tendered = ?, is_bundle = ?, event_id = ?, synced_at = ? WHERE id = ?',
     [fields.paymentMethod, fields.customerHandle, fields.petType, fields.total, fields.total, fields.isBundle ? 1 : 0, fields.eventId, new Date().toISOString(), id]

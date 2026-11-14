@@ -6,6 +6,7 @@ import {
   updateProduct,
   decrementStock,
   incrementStock,
+  getActiveVariantsGroupedByProduct,
 } from '../../db/products';
 import { mockDb } from '../../__mocks__/expo-sqlite';
 
@@ -130,5 +131,22 @@ describe('incrementStock', () => {
   it('does nothing for an empty restore', async () => {
     await incrementStock([]);
     expect(mockDb.runAsync).not.toHaveBeenCalled();
+  });
+});
+
+describe('getActiveVariantsGroupedByProduct', () => {
+  it('reads every active variant in one query and groups it by product', async () => {
+    mockDb.getAllAsync.mockResolvedValueOnce([
+      { id: 1, product_id: 7, name: 'Beef' },
+      { id: 2, product_id: 7, name: 'Chicken' },
+      { id: 3, product_id: 9, name: 'Tuna' },
+    ]);
+
+    const grouped = await getActiveVariantsGroupedByProduct();
+
+    expect(mockDb.getAllAsync).toHaveBeenCalledTimes(1);
+    expect(mockDb.getAllAsync.mock.calls[0][0]).toContain('WHERE is_active = 1 ORDER BY product_id ASC, name ASC');
+    expect(grouped.get(7)?.map((v) => v.name)).toEqual(['Beef', 'Chicken']);
+    expect(grouped.get(9)?.map((v) => v.name)).toEqual(['Tuna']);
   });
 });

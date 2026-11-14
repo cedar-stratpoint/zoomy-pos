@@ -1,4 +1,4 @@
-import { fetchRemoteOrders } from '../../utils/orders-remote';
+import { fetchRemoteOrders, fetchRemoteOrderEntries } from '../../utils/orders-remote';
 import * as supa from '../../lib/supabase';
 
 // Only the Coop client matters here; the DB reads orders-remote imports are never
@@ -127,5 +127,41 @@ describe('fetchRemoteOrders', () => {
     mockedGetSupabase.mockReturnValue(null);
     const res = await fetchRemoteOrders(range);
     expect(res.ok).toBe(false);
+  });
+});
+
+describe('fetchRemoteOrderEntries', () => {
+  function sbSingle(result: { data: unknown; error: unknown }) {
+    const from = jest.fn();
+    const select = jest.fn();
+    const builder: Record<string, unknown> = {};
+    builder.select = (cols: string) => { select(cols); return builder; };
+    builder.eq = () => builder;
+    builder.maybeSingle = () => Promise.resolve(result);
+    from.mockReturnValue(builder);
+    return { client: { from }, from, select };
+  }
+
+  it('reads the order and its lines in one embedded request', async () => {
+    const sb = sbSingle({
+      data: { total: 240, pos_order_items: [{ product_id: 'SKU-1', bundle_id: null, bundle_group: null, qty: 2, unit_price: 120, line_total: 240 }] },
+      error: null,
+    });
+    mockedGetSupabase.mockReturnValue(sb.client);
+
+    const res = await fetchRemoteOrderEntries('uuid-1');
+
+    expect(sb.from).toHaveBeenCalledTimes(1);
+    expect(sb.from).toHaveBeenCalledWith('pos_orders');
+    expect(sb.select.mock.calls[0][0]).toContain('pos_order_items(');
+    expect(res).toEqual({ ok: true, entries: [{ kind: 'item', product_id: 'SKU-1', qty: 2, unit_price: 120 }] });
+  });
+
+  it('fails closed when the order is missing or the read errors', async () => {
+    mockedGetSupabase.mockReturnValue(sbSingle({ data: null, error: null }).client);
+    expect(await fetchRemoteOrderEntries('missing')).toEqual({ ok: false });
+
+    mockedGetSupabase.mockReturnValue(sbSingle({ data: null, error: { message: 'boom' } }).client);
+    expect(await fetchRemoteOrderEntries('broken')).toEqual({ ok: false });
   });
 });

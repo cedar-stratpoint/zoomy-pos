@@ -5,7 +5,9 @@ import {
   savePickBundle,
   updatePickBundle,
   validatePickBundleInput,
+  reconcileRemoteBundles,
   PickBundleInput,
+  RemoteBundle,
 } from '../../db/saved-bundles';
 import { mockDb } from '../../__mocks__/expo-sqlite';
 
@@ -132,5 +134,53 @@ describe('updatePickBundle', () => {
     const [sql, params] = mockDb.runAsync.mock.calls[0];
     expect(sql).toContain('UPDATE saved_bundles SET name = ?, price = ?, pick_count = ?, line_categories = ?, emoji = ?');
     expect(params).toEqual(['Buy Any 4', 570, 4, '["Freeze Dried","Meaty Treats"]', null, 3]);
+  });
+});
+
+describe('reconcileRemoteBundles', () => {
+  const remote = (uuid: string, name = 'Any 3'): RemoteBundle => ({
+    bundle_uuid: uuid, name, price: 300, bundle_type: 'pick', pick_count: 3,
+    line_categories: ['Jerky'], emoji: null, is_active: 1, items: [],
+  });
+
+  beforeEach(() => {
+    mockDb.getAllAsync.mockResolvedValueOnce([
+      { id: 1, bundle_uuid: 'kept' },
+      { id: 2, bundle_uuid: 'gone-a' },
+      { id: 3, bundle_uuid: 'gone-b' },
+    ]);
+  });
+  afterEach(() => mockDb.runAsync.mockResolvedValue({ lastInsertRowId: 1, changes: 1 }));
+
+  it('reads local bundles once, no matter how many come from Coop', async () => {
+    await reconcileRemoteBundles([remote('kept'), remote('new-1'), remote('new-2')]);
+
+    expect(mockDb.getAllAsync).toHaveBeenCalledTimes(1);
+    expect(mockDb.getFirstAsync).not.toHaveBeenCalled();
+  });
+
+  it('updates a known bundle only when a field differs, and inserts an unknown one', async () => {
+    await reconcileRemoteBundles([remote('kept'), remote('new-1')]);
+
+    const [updateSql] = mockDb.runAsync.mock.calls.find(([sql]) => String(sql).startsWith('UPDATE saved_bundles'))!;
+    expect(updateSql).toContain('name IS NOT ?');
+    const inserts = mockDb.runAsync.mock.calls.filter(([sql]) => String(sql).startsWith('INSERT INTO saved_bundles'));
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0][1]).toContain('new-1');
+  });
+
+  it('deletes every bundle Coop no longer has in a single statement', async () => {
+    await reconcileRemoteBundles([remote('kept')]);
+
+    const deletes = mockDb.runAsync.mock.calls.filter(([sql]) => String(sql).startsWith('DELETE FROM saved_bundles'));
+    expect(deletes).toEqual([['DELETE FROM saved_bundles WHERE id IN (?,?)', [2, 3]]]);
+  });
+
+  it('reports no change when Coop matches the local copy', async () => {
+    mockDb.runAsync.mockResolvedValue({ lastInsertRowId: 0, changes: 0 });
+    mockDb.getAllAsync.mockReset().mockResolvedValueOnce([{ id: 1, bundle_uuid: 'kept' }]);
+
+    expect(await reconcileRemoteBundles([remote('kept')])).toBe(0);
+    mockDb.getAllAsync.mockResolvedValue([]);
   });
 });

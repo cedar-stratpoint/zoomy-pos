@@ -1,11 +1,5 @@
 import JSZip from 'jszip';
-import {
-  getActiveProducts,
-  getVariantsByProductId,
-  type Product,
-  type ProductVariant,
-} from '../db/products';
-import { getSavedBundles } from '../db/saved-bundles';
+import { gatherExportCatalog } from './export-products-catalog';
 import {
   CATALOG_CSV_NAME,
   productImageEntryPath,
@@ -17,24 +11,8 @@ function archiveName(): string {
   return `zoomy-products-${dateStr}.zip`;
 }
 
-async function gatherCatalog(): Promise<{
-  products: Product[];
-  variantsByProductId: Map<number, ProductVariant[]>;
-  bundles: Awaited<ReturnType<typeof getSavedBundles>>;
-}> {
-  const products = await getActiveProducts();
-  const variantsByProductId = new Map<number, ProductVariant[]>();
-  for (const p of products) {
-    if (p.has_variants) {
-      variantsByProductId.set(p.id, await getVariantsByProductId(p.id));
-    }
-  }
-  const bundles = await getSavedBundles();
-  return { products, variantsByProductId, bundles };
-}
-
 export async function exportProductsArchive(): Promise<void> {
-  const { products, variantsByProductId, bundles } = await gatherCatalog();
+  const { products, variantsByProductId, bundles } = await gatherExportCatalog();
 
   const zip = new JSZip();
   const productImageFilenames = new Map<number, string>();
