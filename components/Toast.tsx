@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
-import { DURATION, EASE_OUT } from '../constants/motion';
+import { DURATION, EASE_OUT, PRESS_OPACITY } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 export type ToastVariant = 'success' | 'error';
@@ -150,7 +150,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               { borderColor: accent, opacity, transform: [{ translateY }] },
             ]}
           >
-            <Pressable onPress={dismiss} style={styles.toastInner}>
+            <Pressable onPress={dismiss} style={({ pressed }) => [styles.toastInner, pressed && { opacity: PRESS_OPACITY }]}>
               <Ionicons name={iconName} size={22} color={accent} />
               <View style={styles.toastText}>
                 <Text style={styles.title} numberOfLines={1}>
