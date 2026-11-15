@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { HitArea } from './HitArea';
 import { F, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import type { PosEvent } from '../db/events';
@@ -44,6 +45,7 @@ export function EventBadge({ event, mustPick = false, switchable = false, onPres
         <Text style={styles.cal}>🗓️</Text>
         <Text style={styles.pickLabel} numberOfLines={1}>Pick event</Text>
         <View style={styles.pickDot} />
+        <HitArea fullWidth />
       </TouchableOpacity>
     );
   }
@@ -60,6 +62,7 @@ export function EventBadge({ event, mustPick = false, switchable = false, onPres
       >
         <Text style={styles.cal}>🗓️</Text>
         <Text style={styles.idleLabel} numberOfLines={1}>Set up event</Text>
+        <HitArea fullWidth />
       </TouchableOpacity>
     );
   }
@@ -86,6 +89,7 @@ export function EventBadge({ event, mustPick = false, switchable = false, onPres
       <Text style={styles.label} numberOfLines={1}>{label}</Text>
       {floatMissing && <View style={styles.dot} />}
       {switchable && <Text style={styles.caret}>▾</Text>}
+      <HitArea fullWidth />
     </TouchableOpacity>
   );
 }

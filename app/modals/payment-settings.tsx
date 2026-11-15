@@ -11,6 +11,7 @@ import { useToast } from '../../components/Toast';
 import { F, R, type Palette } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { PRESS_OPACITY } from '../../constants/motion';
+import { TapSwitch } from '../../components/TapSwitch';
 
 /**
  * Settings -> Payment Options. Controls which quick-tap methods show on the
@@ -90,7 +91,8 @@ export default function PaymentSettingsModal() {
         <View style={styles.card}>
           <View style={styles.methodRow}>
             <Text style={styles.methodLabel}>Confirmation modal</Text>
-            <Switch
+            <TapSwitch
+              accessibilityLabel="Confirm before recording a payment"
               value={confirmOnPay}
               onValueChange={toggleConfirm}
               trackColor={{ false: colors.borderDark, true: colors.pink }}

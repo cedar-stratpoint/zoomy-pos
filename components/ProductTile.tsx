@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { TouchableOpacity, Text, View, StyleSheet, Image } from 'react-native';
+import { HitArea } from './HitArea';
 import { Ionicons } from '@expo/vector-icons';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -100,6 +101,7 @@ export function ProductTile({ id, name, price, hasVariants, imageUri, emoji, bad
           accessibilityLabel={`Remove all ${name}`}
         >
           <Ionicons name="close" size={16} color="#fff" />
+          <HitArea />
         </TouchableOpacity>
       )}
       {active && (onMinus ? (
@@ -115,8 +117,9 @@ export function ProductTile({ id, name, price, hasVariants, imageUri, emoji, bad
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }}
           >
             <Text style={styles.qtyMinusText}>−</Text>
+            <HitArea />
           </TouchableOpacity>
-          <Text style={styles.qtyCount} testID="badge">{badgeCount}</Text>
+          <Text style={styles.qtyCount} testID="badge" pointerEvents="none">{badgeCount}</Text>
         </View>
       ) : (
         <View style={styles.badge}>
@@ -222,8 +225,10 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   // Clear-whole-item control, top-left so it never sits next to the decrement pill.
   clearBtn: {
     position: 'absolute',
-    top: 7,
-    left: 7,
+    // 8, not 7: the 44pt HitArea reaches 8px past this 28px button, and the
+    // tile clips at its edge.
+    top: 8,
+    left: 8,
     width: 28,
     height: 28,
     borderRadius: 14,

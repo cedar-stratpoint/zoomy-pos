@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { HitArea } from './HitArea';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import type { PaymentMethod } from '../db/transactions';
@@ -52,6 +53,7 @@ export function PaymentMethodTabs({ value, onChange, items, disabled, compact }:
             >
               {m.emoji}  {m.label}
             </Text>
+            <HitArea fullWidth />
           </TouchableOpacity>
         );
       })}

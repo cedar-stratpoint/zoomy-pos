@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { ScrollView, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { HitArea } from './HitArea';
 import { F, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { PRESS_OPACITY } from '../constants/motion';
@@ -23,6 +24,7 @@ export function SubcategoryFilter({ subcategories, active, onSelect }: Props) {
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      style={styles.scroll}
       contentContainerStyle={styles.row}
       keyboardShouldPersistTaps="handled"
     >
@@ -41,6 +43,7 @@ export function SubcategoryFilter({ subcategories, active, onSelect }: Props) {
             <Text style={[styles.label, on && styles.labelActive]} numberOfLines={1}>
               {sub}
             </Text>
+            <HitArea fullWidth />
           </TouchableOpacity>
         );
       })}
@@ -49,7 +52,13 @@ export function SubcategoryFilter({ subcategories, active, onSelect }: Props) {
 }
 
 const makeStyles = (c: Palette) => StyleSheet.create({
-  row: { gap: 6, paddingHorizontal: 2, paddingVertical: 2 },
+  // 27px chips: 9px of row padding holds each chip's 44px tap box (horizontal
+  // scroll clips vertically on web); the negative margin keeps the old footprint.
+  // That reaches past the footprint, so a screen with content right below this
+  // row must give the row's container zIndex: 1, or the later content takes
+  // those taps (react-native-web stacks every View at z-index 0).
+  scroll: { marginVertical: -7 },
+  row: { gap: 6, paddingHorizontal: 2, paddingVertical: 9 },
   chip: {
     backgroundColor: 'transparent',
     borderWidth: 1,

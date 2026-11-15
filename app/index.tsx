@@ -50,7 +50,7 @@ import {
 import { useColumns } from '../hooks/useColumns';
 import { subscribeCatalogChanged, pullCatalog } from '../utils/catalog-sync';
 import { PullToRefresh } from '../components/PullToRefresh';
-import { F, R, type Palette } from '../constants/theme';
+import { F, R, MIN_TAP, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 
 type Selection = { category: string | null; subcategory: string | null };
@@ -838,6 +838,10 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   headerBtn: {
     padding: 10,
+    minWidth: MIN_TAP,
+    minHeight: MIN_TAP,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: c.surface,
     borderRadius: R.sm,
     borderWidth: 1,
@@ -853,6 +857,9 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   },
 
   filters: {
+    // Above the list below it: the tab/chip rows' 44pt tap boxes reach a few px
+    // past this block, and react-native-web stacks every View at z-index 0.
+    zIndex: 1,
     paddingHorizontal: 12,
     paddingTop: 10,
     gap: 8,

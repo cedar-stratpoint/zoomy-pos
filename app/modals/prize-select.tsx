@@ -142,7 +142,9 @@ export default function PrizeSelectModal() {
 
 const makeStyles = (c: Palette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: c.bg },
-  filters: { paddingHorizontal: 12, paddingTop: 10, gap: 8 },
+  // zIndex: above the list below, so the tab/chip rows' 44pt tap boxes (which
+  // reach a few px past this block) win; react-native-web stacks Views at z 0.
+  filters: { paddingHorizontal: 12, paddingTop: 10, gap: 8, zIndex: 1 },
   listContent: { padding: 16, paddingBottom: 24, gap: 8 },
   hint: { color: c.textMuted, fontSize: F.sm, lineHeight: 19, marginBottom: 4 },
   row: {

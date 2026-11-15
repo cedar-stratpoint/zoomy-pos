@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  StyleSheet, SafeAreaView, Switch, Alert, KeyboardAvoidingView, Platform, Modal,
+  StyleSheet, SafeAreaView, Alert, KeyboardAvoidingView, Platform, Modal,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { router } from 'expo-router';
@@ -20,10 +20,11 @@ import { PullToRefresh } from '../../components/PullToRefresh';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { PRODUCT_EMOJIS, MAX_EMOJI, emojiGraphemes, clampEmoji } from '../../constants/emoji';
 import { Ionicons } from '@expo/vector-icons';
-import { F, R, type Palette } from '../../constants/theme';
+import { F, R, MIN_TAP, type Palette } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { TourTarget, MaybeTourTarget } from '../../components/tour/TourTarget';
 import { useToast } from '../../components/Toast';
+import { TapSwitch } from '../../components/TapSwitch';
 import { runOptimistic } from '../../utils/optimistic';
 
 /** Pseudo-pill that shows the Bundle Presets instead of individual products. */
@@ -541,8 +542,9 @@ export default function ProductsModal() {
               >
                 <Ionicons name="trash-outline" size={14} color={colors.textSecondary} />
               </TouchableOpacity>
-              <Switch
+              <TapSwitch
                 testID={`product-listing-${item.id}`}
+                accessibilityLabel={`List ${item.name} on the register`}
                 value={item.is_active === 1}
                 onValueChange={() => handleToggleProduct(item)}
                 trackColor={{ false: colors.borderDark, true: colors.pink }}
@@ -591,8 +593,9 @@ export default function ProductsModal() {
               >
                 <Ionicons name="trash-outline" size={14} color={colors.textSecondary} />
               </TouchableOpacity>
-              <Switch
+              <TapSwitch
                 testID={`bundle-listing-${bundle.id}`}
+                accessibilityLabel={`List ${bundle.name} on the register`}
                 value={bundle.is_active === 1}
                 onValueChange={() => handleToggleBundle(bundle)}
                 trackColor={{ false: colors.borderDark, true: colors.pink }}
@@ -718,6 +721,8 @@ const makeStyles = (c: Palette) => StyleSheet.create({
     borderColor: c.border,
     borderRadius: R.sm,
     padding: 7,
+    minWidth: MIN_TAP,
+    minHeight: MIN_TAP,
     alignItems: 'center',
     justifyContent: 'center',
   },
