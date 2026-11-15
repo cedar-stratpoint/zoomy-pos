@@ -10,6 +10,7 @@
     "build:web": "expo export --platform web && node scripts/patch-pwa.js",
     "typecheck": "tsc --noEmit",
     "check:pagination": "node scripts/check-pagination.mjs",
+    "audit:taps": "node scripts/tap-audit.mjs",
     "test": "jest"
   },
   "dependencies": {
