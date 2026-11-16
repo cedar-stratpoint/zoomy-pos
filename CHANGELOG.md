@@ -12,6 +12,29 @@ Dates are local working dates (GMT+8). Newest first.
 
 ---
 
+## 2026-11-16 — Haptics only when something happens — `feat`
+
+Native-feel pass 6b, the last item of the POS performance plan. The user's rule:
+haptics only when something actually happens.
+
+- Adds `expo-haptics` (~15.0.8, the SDK 54 version) behind one helper,
+  `utils/haptics.ts` `hapticOutcome('success' | 'warning' | 'error')`, the
+  app's only haptic, using the system notification patterns.
+- **Where it fires:** success when a sale is recorded, when a photo scan's packs
+  go into the cart, and when a void is undone. Warning when a sale is voided.
+  Error when an action is blocked or didn't stick: a tile with no stock left, a
+  product that's already in the cart as a prize, a wrong admin PIN, a listing
+  toggle Coop rejected, and a note that couldn't be saved.
+- **Never on an ordinary tap.** Buttons already give visual feedback on
+  touch-down (6a). The legacy `/modals/scan` screen (no entry point) is left
+  alone.
+- **Platform reach:** on the PWA, expo-haptics uses `navigator.vibrate`, so
+  Android Chrome vibrates and **iOS Safari does nothing** (it has no vibration
+  API). iPhone cashiers get haptics only with a native build, which is parked
+  (plan 6c).
+
+---
+
 ## 2026-11-16 — 44pt tap targets and press-down feedback, measured in the PWA — `feat(a11y)`
 
 Native-feel pass 6a. The user's rules: every button reacts when a finger lands,
