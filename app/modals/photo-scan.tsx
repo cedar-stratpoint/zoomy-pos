@@ -20,6 +20,7 @@ import { cropPack, resizeForScan, type PreparedPhoto, type ScanPhoto } from '../
 import { scanProducts, ScanError, type ScanResult } from '../../utils/photo-scan/scan-products';
 import { matchScanItems, matchUnsure, type MatchResult, type UnsurePack } from '../../utils/photo-scan/match-scan';
 import { saveTrainingSample } from '../../utils/photo-scan/save-training-sample';
+import { hapticOutcome } from '../../utils/haptics';
 
 type Phase = 'choose' | 'camera' | 'scanning' | 'results';
 type Photo = { uri: string; width: number; height: number };
@@ -137,6 +138,7 @@ export default function PhotoScanModal() {
     }
     const packs = [...bundles.flatMap((b) => b.items), ...singles].reduce((sum, i) => sum + i.quantity, 0);
     showToast({ variant: 'success', title: 'Added to sale', message: `${packs} ${packs === 1 ? 'pack' : 'packs'}` });
+    hapticOutcome('success');
     keepForTraining(confirmation);
     router.back();
   }

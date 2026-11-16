@@ -52,6 +52,7 @@ import { subscribeCatalogChanged, pullCatalog } from '../utils/catalog-sync';
 import { PullToRefresh } from '../components/PullToRefresh';
 import { F, R, MIN_TAP, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { hapticOutcome } from '../utils/haptics';
 
 type Selection = { category: string | null; subcategory: string | null };
 
@@ -345,6 +346,7 @@ export default function POSScreen() {
         title: 'In the cart as a prize',
         message: `${product.name} is in the cart as a free prize. Remove it to sell it in this order.`,
       });
+      hapticOutcome('error');
       return;
     }
     if (product.has_variants) {
@@ -358,6 +360,7 @@ export default function POSScreen() {
           title: 'No stock left',
           message: `${product.name} is out of stock. Restock it in Coop to sell more.`,
         });
+        hapticOutcome('error');
         return;
       }
       addItem({ id: product.id, name: product.name, price: product.price! });
@@ -507,6 +510,7 @@ export default function POSScreen() {
         title: 'Sale recorded',
         message: `${label} ₱${saleTotal.toFixed(2)}${prizeRows.length > 0 ? ` · ${prizeRows.length} prize${prizeRows.length !== 1 ? 's' : ''}` : ''} · new sale ready`,
       });
+      hapticOutcome('success');
       // Write the sale up to Coop (online-only). Fire in the background so the
       // next sale isn't blocked; warn only if the sync fails (sale is saved locally).
       pushSale({ items: saleItems, bundles: bundles.map((b) => ({ presetId: b.presetId, price: b.price })), subtotal: saleTotal, discount: null, total: saleTotal, paymentMethod: method, customerHandle: customerHandle.trim() || null, eventId, petType: salePetType, clientUuid }).then((res) => {
