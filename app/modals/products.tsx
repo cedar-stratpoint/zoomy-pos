@@ -26,6 +26,7 @@ import { TourTarget, MaybeTourTarget } from '../../components/tour/TourTarget';
 import { useToast } from '../../components/Toast';
 import { TapSwitch } from '../../components/TapSwitch';
 import { runOptimistic } from '../../utils/optimistic';
+import { hapticOutcome } from '../../utils/haptics';
 
 /** Pseudo-pill that shows the Bundle Presets instead of individual products. */
 const BUNDLES_LINE = 'Bundles';
@@ -238,6 +239,7 @@ export default function ProductsModal() {
   }
 
   function showListingFailed(name: string, wasListed: boolean) {
+    hapticOutcome('error');
     showToast({
       variant: 'error',
       title: 'Couldn’t update Coop',

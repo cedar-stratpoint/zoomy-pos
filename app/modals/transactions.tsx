@@ -43,6 +43,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { TourTarget } from '../../components/tour/TourTarget';
 import { Sheet } from '../../components/Sheet';
 import { PRESS_OPACITY } from '../../constants/motion';
+import { hapticOutcome } from '../../utils/haptics';
 
 // Payment methods offered in the edit form.
 const EDIT_METHODS: PaymentMethod[] = ['cash', 'qrph', 'gcash', 'maya', 'card'];
@@ -586,6 +587,7 @@ export default function TransactionsModal() {
       showToast({ variant: 'success', title: 'Note saved on this device', message: 'It syncs to Coop once you’re back online.' });
     } else if (outcome === 'rejected' || outcome === 'failed') {
       setRemarksInView(id, previous);
+      hapticOutcome('error');
       showToast({
         variant: 'error',
         title: 'Note not saved',

@@ -21,6 +21,7 @@ import { makeImageResolver } from '../../utils/import-images';
 import { upsertCatalog, type ImportSummary } from '../../db/catalog-import';
 import { useToast } from '../../components/Toast';
 import { PRESS_OPACITY } from '../../constants/motion';
+import { hapticOutcome } from '../../utils/haptics';
 
 type Step = 'verify' | 'new_pin' | 'settings';
 
@@ -69,6 +70,7 @@ export default function AdminModal() {
       const stored = await getAdminHash();
       const entered = await sha256(pin);
       if (entered !== stored) {
+        hapticOutcome('error');
         Alert.alert('Wrong PIN', 'Incorrect PIN. Try again.');
         setPin('');
         return;
@@ -104,6 +106,7 @@ export default function AdminModal() {
           const { unvoidTransaction } = await import('../../db/transactions');
           await unvoidTransaction(localId);
         }
+        hapticOutcome('success');
         const { refreshPendingCount } = await import('../../utils/outbox');
         await refreshPendingCount();
         router.dismiss();
@@ -123,6 +126,7 @@ export default function AdminModal() {
         const { markVoidSynced } = await import('../../db/transactions');
         if (await voidRemoteOrder(clientUuid)) await markVoidSynced(clientUuid);
       }
+      hapticOutcome('warning');
       const { refreshPendingCount } = await import('../../utils/outbox');
       await refreshPendingCount();
       // Dismiss only the admin PIN modal, returning to the Transactions screen
