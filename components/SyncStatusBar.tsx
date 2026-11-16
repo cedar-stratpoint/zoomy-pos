@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { HitArea } from './HitArea';
 import { Ionicons } from '@expo/vector-icons';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -63,6 +64,7 @@ export function SyncStatusBar() {
         {synced && !syncing && (
           <Ionicons name="checkmark-circle" size={13} color={colors.green} />
         )}
+        <HitArea fullWidth />
       </TouchableOpacity>
 
       {SHOW_INSTALL_BUTTON && canInstall && (

@@ -107,3 +107,7 @@ export const R = {
   lg:  16,
   xl:  24,
 } as const;
+
+/** Smallest tap target, in points, for anything a finger presses (Apple HIG).
+ *  Reach it visibly with minWidth/minHeight, or invisibly with <HitArea>. */
+export const MIN_TAP = 44;

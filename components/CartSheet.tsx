@@ -5,7 +5,8 @@ import {
 } from 'react-native';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
-import { DURATION, EASE_SHEET } from '../constants/motion';
+import { DURATION, EASE_SHEET, PRESS_OPACITY } from '../constants/motion';
+import { HitArea } from './HitArea';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useCart } from '../context/CartContext';
 import { CartPanel } from './CartPanel';
@@ -146,6 +147,7 @@ export function CartSheet({ method, onMethodChange, enabledMethods, petType, onP
             <Pressable
               testID="cart-sheet-peek"
               onPress={open}
+              style={({ pressed }) => pressed && styles.pressed}
               accessibilityRole="button"
               accessibilityLabel="Open current sale"
             >
@@ -153,6 +155,7 @@ export function CartSheet({ method, onMethodChange, enabledMethods, petType, onP
                 {cartCount > 0 ? `${cartCount} item${cartCount !== 1 ? 's' : ''}` : 'Current Sale'}
               </Text>
               <Text style={styles.peekTotal}>₱{total.toFixed(2)}</Text>
+              <HitArea fullWidth />
             </Pressable>
           </TourTarget>
           <TourTarget id="peek-pay">
@@ -243,6 +246,8 @@ const makeStyles = (c: Palette) => StyleSheet.create({
     borderColor: c.borderDark,
     overflow: 'hidden',
   },
+  // Pressable has no built-in feedback: dim on touch-down like every TouchableOpacity.
+  pressed: { opacity: PRESS_OPACITY },
   dragHandleArea: {
     alignItems: 'center',
     paddingTop: 10,

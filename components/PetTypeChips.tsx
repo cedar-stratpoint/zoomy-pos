@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { HitArea } from './HitArea';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import type { PetType } from '../db/transactions';
@@ -48,6 +49,7 @@ export function PetTypeChips({ value, onChange, disabled }: Props) {
             >
               <Text style={styles.emoji}>{opt.emoji}</Text>
               <Text style={[styles.label, active && styles.labelActive]}>{opt.label}</Text>
+              <HitArea fullWidth />
             </TouchableOpacity>
           );
         })}

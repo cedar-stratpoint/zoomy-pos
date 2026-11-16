@@ -6,7 +6,8 @@ import { CartProvider } from '../context/CartContext';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { initSchema } from '../db/schema';
 import { seedDevProducts, seedProductsIfEmpty, seedBundlesIfEmpty, syncLinePricesOnce, syncCatalogNamesOnce, syncCatalogSkusOnce, syncCatalogEmojiOnce, deactivateRetiredSeedProductsOnce } from '../db/seed';
-import { palettes, type ThemeMode } from '../constants/theme';
+import { palettes, MIN_TAP, type ThemeMode } from '../constants/theme';
+import { PRESS_OPACITY } from '../constants/motion';
 import { ToastProvider } from '../components/Toast';
 import { TourProvider, useTour } from '../context/TourContext';
 import { TourOverlay } from '../components/tour/TourOverlay';
@@ -206,7 +207,10 @@ export default function RootLayout() {
         </Text>
         <Pressable
           onPress={() => { setReady(false); bootstrap(); }}
-          style={{ backgroundColor: c.pink, paddingHorizontal: 22, paddingVertical: 12, borderRadius: 10 }}
+          style={({ pressed }) => ({
+            backgroundColor: c.pink, paddingHorizontal: 22, paddingVertical: 12, borderRadius: 10,
+            minHeight: MIN_TAP, justifyContent: 'center', opacity: pressed ? PRESS_OPACITY : 1,
+          })}
         >
           <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
         </Pressable>

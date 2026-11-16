@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
+import { HitArea } from './HitArea';
 import { Ionicons } from '@expo/vector-icons';
 import { F, R, type Palette } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -87,8 +88,9 @@ export function CartPanel({ method, onMethodChange, enabledMethods, petType, onP
                       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                     >
                       <Text style={styles.stepMinus}>−</Text>
+                      <HitArea />
                     </TouchableOpacity>
-                    <Text style={styles.stepQty}>{item.quantity}</Text>
+                    <Text style={styles.stepQty} pointerEvents="none">{item.quantity}</Text>
                     <TouchableOpacity
                       testID={`cart-plus-${key}`}
                       style={[styles.stepBtn, styles.stepPlus, atStockLimit && styles.stepBtnDisabled]}
@@ -105,6 +107,7 @@ export function CartPanel({ method, onMethodChange, enabledMethods, petType, onP
                       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                     >
                       <Text style={styles.stepPlusText}>+</Text>
+                      <HitArea />
                     </TouchableOpacity>
                   </View>
                   <Text style={[styles.lineTotal, isPrize && styles.lineTotalPrize]}>₱{lineTotal.toFixed(2)}</Text>
@@ -116,6 +119,7 @@ export function CartPanel({ method, onMethodChange, enabledMethods, petType, onP
                     accessibilityLabel={isPrize ? `Un-mark ${item.productName} as prize` : `Mark ${item.productName} as free prize`}
                   >
                     <Ionicons name={isPrize ? 'gift' : 'gift-outline'} size={16} color={isPrize ? '#fff' : colors.textMuted} />
+                    <HitArea />
                   </TouchableOpacity>
                   <TouchableOpacity
                     testID={`cart-remove-${key}`}
@@ -125,6 +129,7 @@ export function CartPanel({ method, onMethodChange, enabledMethods, petType, onP
                     accessibilityLabel={`Remove ${item.productName}`}
                   >
                     <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
+                    <HitArea />
                   </TouchableOpacity>
                 </View>
               );
@@ -226,7 +231,8 @@ const makeStyles = (c: Palette) => StyleSheet.create({
     borderWidth: 1,
     borderColor: c.border,
     borderRadius: 999,
-    overflow: 'hidden',
+    // No overflow clip: it would also clip each button's 44pt HitArea. The pink
+    // + button rounds its own outer corners instead.
   },
   stepBtn: {
     width: 30,
@@ -234,7 +240,7 @@ const makeStyles = (c: Palette) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepPlus: { backgroundColor: c.pink },
+  stepPlus: { backgroundColor: c.pink, borderTopRightRadius: 999, borderBottomRightRadius: 999 },
   stepBtnDisabled: { opacity: 0.35 },
   stepMinus: { color: c.red, fontSize: 18, fontWeight: '800', lineHeight: 20 },
   stepPlusText: { color: '#fff', fontSize: 18, fontWeight: '800', lineHeight: 20 },
@@ -264,6 +270,9 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   // Per-line prize toggle: a gift button that turns the line into a free
   // giveaway (₱0, excluded from the total, recorded separately as a prize).
   prizeBtn: {
+    // Room for the 44pt HitAreas of this button and the remove button next to
+    // it not to overlap (28 + 16 + 28 = two 44pt boxes side by side).
+    marginRight: 10,
     width: 28,
     height: 28,
     borderRadius: 8,

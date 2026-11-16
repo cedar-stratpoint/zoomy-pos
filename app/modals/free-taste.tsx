@@ -5,7 +5,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import * as Crypto from 'expo-crypto';
-import { F, R, type Palette } from '../../constants/theme';
+import { F, R, MIN_TAP, type Palette } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { TourTarget, MaybeTourTarget } from '../../components/tour/TourTarget';
 import { useTourScene } from '../../context/TourContext';
@@ -29,6 +29,7 @@ import {
 import { formatRelativeTime } from '../../utils/format-relative-time';
 import { refreshPendingCount } from '../../utils/outbox';
 import { PRESS_OPACITY, PRESS_OPACITY_PRIMARY } from '../../constants/motion';
+import { HitArea } from '../../components/HitArea';
 
 type Selection = { category: string | null; subcategory: string | null };
 
@@ -326,6 +327,7 @@ export default function FreeTasteModal() {
         activeOpacity={PRESS_OPACITY}
       >
         <Text style={[styles.tabLabel, mode === 'record' && styles.tabLabelActive]}>Record</Text>
+        <HitArea fullWidth />
       </TouchableOpacity>
       <TouchableOpacity
         testID="free-taste-tab-recent"
@@ -334,6 +336,7 @@ export default function FreeTasteModal() {
         activeOpacity={PRESS_OPACITY}
       >
         <Text style={[styles.tabLabel, mode === 'recent' && styles.tabLabelActive]}>Recent</Text>
+        <HitArea fullWidth />
       </TouchableOpacity>
     </View>
     </TourTarget>
@@ -457,8 +460,9 @@ export default function FreeTasteModal() {
                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 >
                   <Text style={[styles.stepMinus, count === 0 && styles.stepDisabled]}>−</Text>
+                  <HitArea />
                 </TouchableOpacity>
-                <Text style={styles.stepQty}>{count}</Text>
+                <Text style={styles.stepQty} pointerEvents="none">{count}</Text>
                 <TouchableOpacity
                   testID={`free-taste-plus-${item.id}`}
                   style={[styles.stepBtn, styles.stepPlus]}
@@ -466,6 +470,7 @@ export default function FreeTasteModal() {
                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 >
                   <Text style={styles.stepPlusText}>+</Text>
+                  <HitArea />
                 </TouchableOpacity>
               </View>
             </View>
@@ -519,13 +524,16 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   tabLabel: { color: c.textSecondary, fontSize: F.sm, fontWeight: '700' },
   tabLabelActive: { color: '#fff' },
   listContent: { padding: 16, paddingBottom: 16, gap: 8 },
-  headerBlock: { gap: 8, marginBottom: 4, paddingHorizontal: 16, paddingTop: 4 },
+  // zIndex: above the list below, so the tab/chip rows' 44pt tap boxes (which
+  // reach a few px past this block) win; react-native-web stacks Views at z 0.
+  headerBlock: { gap: 8, marginBottom: 4, paddingHorizontal: 16, paddingTop: 4, zIndex: 1 },
   hint: { color: c.textMuted, fontSize: F.sm, lineHeight: 19, marginBottom: 4 },
   fieldLabel: { color: c.textSecondary, fontSize: F.sm, fontWeight: '700' },
   optional: { color: c.textMuted, fontSize: F.xs, fontWeight: '400' },
   textInput: {
     backgroundColor: c.surface, color: c.textPrimary, borderRadius: R.sm, borderWidth: 1,
     borderColor: c.border, paddingVertical: 11, paddingHorizontal: 14, fontSize: F.md,
+    minHeight: MIN_TAP,
   },
   search: { marginTop: 4 },
   row: {
@@ -549,10 +557,11 @@ const makeStyles = (c: Palette) => StyleSheet.create({
     borderWidth: 1,
     borderColor: c.border,
     borderRadius: 999,
-    overflow: 'hidden',
+    // No overflow clip: it would also clip each button's 44pt HitArea. The pink
+    // + button rounds its own outer corners instead.
   },
   stepBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
-  stepPlus: { backgroundColor: c.pink },
+  stepPlus: { backgroundColor: c.pink, borderTopRightRadius: 999, borderBottomRightRadius: 999 },
   stepMinus: { color: c.red, fontSize: 20, fontWeight: '800', lineHeight: 22 },
   stepDisabled: { color: c.textMuted },
   stepPlusText: { color: '#fff', fontSize: 20, fontWeight: '800', lineHeight: 22 },

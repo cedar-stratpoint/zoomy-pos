@@ -12,6 +12,60 @@ Dates are local working dates (GMT+8). Newest first.
 
 ---
 
+## 2026-11-16 — 44pt tap targets and press-down feedback, measured in the PWA — `feat(a11y)`
+
+Native-feel pass 6a. The user's rules: every button reacts when a finger lands,
+and every button is at least 44pt.
+
+- **Finding: `hitSlop` does nothing on the PWA.** react-native-web 0.21's
+  `TouchableOpacity`/`Pressable` ignore it, so the 21 existing `hitSlop`s never
+  enlarged anything for cashiers. Targets had to grow for real.
+- **Measured, not guessed.** `scripts/tap-audit.mjs` (`npm run audit:taps`)
+  opens each screen in headless Chrome at phone and tablet size and probes
+  every button's real tap area with `elementFromPoint`. That catches what a box
+  size can't (clipping by `overflow: hidden` and scroll rows, later siblings
+  painting over an edge). Before: about 30 distinct targets under 44, e.g. the
+  pet chips and pay buttons at 37, subcategory chips at 27, product row
+  edit/delete at 30, switches at 20, "Sync now" at 15, tile −/× at 26 to 28.
+  After: every target reaches 44 except three documented exceptions (below).
+- **Decision (user): mixed fix.** Where there was room, the button grows
+  visibly to 44: product row edit/delete, tablet header icons (42 → 44),
+  Transactions Export and filters, free-taste inputs (42 → 44). Dense
+  controls keep their look and get an invisible 44pt box (`components/HitArea`,
+  a transparent child the touchable owns): category tabs, subcategory chips,
+  pet chips, pay buttons, cart peek, tile −/×, cart and free-taste steppers,
+  the event chip and "Sync now". Pixel diffs against the old build confirm
+  those screens are unchanged, apart from a 1px nudge of the tile × (so the
+  tile's clip doesn't cut its box).
+- **What it took on web:** steppers dropped `overflow: hidden` (the pink + rounds
+  its own corners now); quantity text passes taps through; the prize and
+  remove icons got 10px apart so their boxes don't overlap; tab/chip scroll
+  rows got enough vertical padding to hold the boxes, with a negative margin
+  so the layout doesn't move; and the containers above product lists got
+  `zIndex: 1`, because react-native-web gives every View `z-index: 0` and the
+  list would otherwise take the taps in the overlap.
+- **Switches:** `components/TapSwitch`. On web it draws the system Switch
+  inside a 44pt pressable that owns the tap; on native it's the plain Switch
+  (already about 51x31, keeps thumb dragging). Payment method rows stay as
+  they are: the whole row is the target, and a tap was verified to toggle once.
+- **Press-down feedback:** all 174 `TouchableOpacity`s already dimmed on
+  touch-down. The three real `Pressable` buttons didn't (cart peek, toast
+  dismiss, startup Retry) and now do; the other eight are backdrops, which
+  shouldn't. Actions still fire on release, so scrolling the grid never adds
+  a tile by accident.
+- **Accepted exceptions:** the stack header's back arrow (30, system
+  navigation); payment method switches (row is the target); category tabs
+  measure 43 where a chip row sits right below (the rows' centers are 43.5px
+  apart, so the two boxes share half a pixel).
+- **Plan items 3 and 5 dropped after measuring.** Caching settings and the
+  catalog: the home screen's five focus reads take 0.19 ms at 30 products
+  (0.69 ms at 500), while a catalog cache would need invalidating at 30+ write
+  sites including stock on every sale, risking stale stock at checkout.
+  Image lazy-loading: the grid already virtualizes, tiles already have fixed
+  sizes, and proof photos already load only in the open sale.
+
+---
+
 ## 2026-11-15 — Listing toggles and notes update instantly, and undo if Coop says no — `feat`
 
 Third PR of the POS performance plan.

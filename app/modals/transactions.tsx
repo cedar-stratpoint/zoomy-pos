@@ -38,7 +38,7 @@ import {
   DateFilter, DateRange, getFilterRange, formatRangeLabel, formatRangeForFilename,
 } from '../../utils/date-range';
 import { Ionicons } from '@expo/vector-icons';
-import { F, R, type Palette } from '../../constants/theme';
+import { F, R, MIN_TAP, type Palette } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { TourTarget } from '../../components/tour/TourTarget';
 import { Sheet } from '../../components/Sheet';
@@ -1631,7 +1631,7 @@ const makeStyles = (c: Palette) => StyleSheet.create({
 
   ddWrap: { flex: 1 },
   ddTrigger: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
+    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: MIN_TAP,
     paddingVertical: 11, paddingHorizontal: 12, borderRadius: R.sm,
     backgroundColor: c.elevated, borderWidth: 1, borderColor: c.border,
   },
@@ -1670,6 +1670,8 @@ const makeStyles = (c: Palette) => StyleSheet.create({
     borderRadius: R.sm,
     paddingVertical: 7,
     paddingHorizontal: 12,
+    minHeight: MIN_TAP,
+    justifyContent: 'center',
   },
   exportBtnText: { color: c.textSecondary, fontSize: F.xs, fontWeight: '700' },
 
