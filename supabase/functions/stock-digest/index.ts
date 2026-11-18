@@ -17,7 +17,7 @@ const EMAIL_FROM = Deno.env.get('EMAIL_FROM') ?? 'coop-alerts@hello.lanceamiel.s
 const EMAIL_TO_FALLBACK = (Deno.env.get('EMAIL_TO') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 const INVENTORY_URL = Deno.env.get('INVENTORY_URL') ?? 'https://coop-brand-os-staging.vercel.app/inventory?channel=offline';
 // Non-prod tag, self-configuring from the project ref (prod ref -> clean).
-const ENV_TAG = SUPABASE_URL.includes('syxwixxzmytvhwhkwdvw') ? 'STAGING' : null;
+const ENV_TAG = ['aufeohbqrxpvylfdvsps', 'syxwixxzmytvhwhkwdvw'].some((ref) => SUPABASE_URL.includes(ref)) ? 'STAGING' : null;
 
 const FORECAST_WINDOW_DAYS = 60;
 const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
