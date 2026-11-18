@@ -12,6 +12,25 @@ Dates are local working dates (GMT+8). Newest first.
 
 ---
 
+## 2026-11-19 — Coop Supabase moves to the Pro projects (in progress) — `fix(alerts)`
+
+The shared Coop Supabase is moving to new Pro-plan projects: Staging
+`syxwixxzmytvhwhkwdvw` to `aufeohbqrxpvylfdvsps`, Production
+`qkxbwzdxhwcbwgriwipi` to `sdwspafqbalwzwiutrow`. The `stock-alert` and
+`stock-digest` edge functions now treat both staging refs as STAGING, so alert
+emails from the new Staging project still carry the tag.
+
+**Decisions.**
+- **Values change, names don't.** The app keeps `EXPO_PUBLIC_SUPABASE_URL` and
+  `EXPO_PUBLIC_SUPABASE_ANON_KEY`. Only their values move, then the web build is
+  rebuilt, because Expo bakes these in at build time.
+- **Staging first, old projects kept.** The old Staging stays live during the
+  cutover as the rollback. Production moves only after an explicit go-ahead, in a
+  quiet window with every device synced.
+- **No `boxme-sync` edge function or cron on the new projects.** BoxMe rejects
+  Supabase's egress IPs, so the GitHub workflow in `zoomy-observability` is the
+  BoxMe scheduler.
+
 ## 2026-11-16 — Haptics only when something happens — `feat`
 
 Native-feel pass 6b, the last item of the POS performance plan. The user's rule:
