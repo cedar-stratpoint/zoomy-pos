@@ -18,7 +18,7 @@ const INVENTORY_URL = Deno.env.get('INVENTORY_URL') ?? 'https://coop-brand-os-st
 // Tag non-prod alert emails so a staging test is unmistakable; prod stays clean.
 // Self-configuring: each project's function has its own SUPABASE_URL, so the staging
 // project ref identifies staging with no secret. (Prod ref -> null -> no tag.)
-const ENV_TAG = SUPABASE_URL.includes('syxwixxzmytvhwhkwdvw') ? 'STAGING' : null;
+const ENV_TAG = ['aufeohbqrxpvylfdvsps', 'syxwixxzmytvhwhkwdvw'].some((ref) => SUPABASE_URL.includes(ref)) ? 'STAGING' : null;
 
 const FORECAST_WINDOW_DAYS = 60;
 const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
